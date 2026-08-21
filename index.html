@@ -1,0 +1,2031 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Variable Fee</title>
+<style>
+  :root{
+    --ink:#0e141c; --panel:#161e29; --panel2:#1c2634; --line:#28344455;
+    --text:#e7ecf3; --muted:#8b98aa; --faint:#5d6b7e;
+    --gold:#d9a648; --gold-dim:#d9a64822; --cyan:#72b7cc; --green:#63b380;
+    --red:#e06a5e; --red-dim:#e06a5e1c; --green-dim:#63b3801f;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+    --serif:"Iowan Old Style",Georgia,"Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{background:var(--ink)}
+  body{background:var(--ink);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.55;min-height:100vh}
+  ::selection{background:var(--gold);color:#10151c}
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  button:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+
+  /* ---------------- HUD ---------------- */
+  #hud{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 200px 12px 18px;
+    border-bottom:1px solid var(--line);background:#0e141cf5;position:sticky;top:0;z-index:40}
+  #hud .brand{font-family:var(--serif);font-size:17px;white-space:nowrap}
+  #hud .brand em{font-style:italic;color:var(--gold)}
+  #hud .where{font-family:var(--mono);font-size:10.5px;letter-spacing:1.8px;text-transform:uppercase;color:var(--faint)}
+  .dirbtn{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;color:var(--cyan);border:1px solid #72b7cc44;border-radius:6px;padding:3px 10px;transition:background .15s}
+  .dirbtn:hover{background:#72b7cc1a}
+  #ledgerchips{display:flex;gap:12px;margin-left:auto;flex-wrap:wrap}
+  .chip{display:flex;gap:6px;align-items:baseline;font-size:11px;color:var(--faint)}
+  .chip b{font-family:var(--mono);font-size:12.5px;color:var(--text);font-variant-numeric:tabular-nums}
+  .chip.hot b{color:var(--gold)} .chip.neg b{color:var(--red)}
+  .chip.flash{animation:chipflash .8s ease}
+  @keyframes chipflash{0%{background:var(--gold-dim)}100%{background:transparent}}
+  #audit{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted);position:absolute;top:16px;right:18px}
+  #audit .bar{width:80px;height:5px;border-radius:3px;background:#232e3d;overflow:hidden}
+  #audit .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),#e8c273);transition:width .5s}
+  #audit b{font-family:var(--mono);color:var(--text)}
+  #audit{cursor:pointer}
+  .books-callout{position:absolute;top:calc(100% + 10px);right:14px;z-index:80;width:300px;background:var(--gold);color:#131a24;
+    font-size:13px;line-height:1.45;padding:11px 15px;border-radius:10px;box-shadow:0 6px 24px #00000060;
+    cursor:pointer;animation:calloutIn .4s ease, calloutBob 2.2s ease-in-out .4s infinite}
+  .books-callout::before{content:'';position:absolute;top:-8px;right:44px;border:8px solid transparent;border-top:none;border-bottom-color:var(--gold)}
+  .books-callout b{display:block;margin-bottom:2px;padding-right:16px}
+  .books-callout{cursor:pointer}
+  .books-callout .bc-x{position:absolute;top:3px;right:7px;font-size:16px;line-height:1;color:inherit;opacity:.65;background:none;border:none;cursor:pointer;padding:2px}
+  .books-callout .bc-x:hover{opacity:1}
+  [data-theme="light"] .books-callout{color:#ffffff}
+  @keyframes calloutIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  @keyframes calloutBob{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+  @media(prefers-reduced-motion:reduce){.books-callout{animation:calloutIn .4s ease}}
+  .chip{cursor:pointer;border-radius:5px;padding:1px 5px;margin:-1px -5px}
+  .chip:hover{background:#ffffff0d}
+  .finding{border-top:1px solid var(--line);padding:9px 0 7px}
+  .fhead{font-family:var(--mono);font-size:10px;letter-spacing:1.5px;color:var(--gold);text-transform:uppercase;margin-bottom:3px}
+  .fq{font-size:13.5px;color:#d5dde8}
+  .fa{font-size:12.5px;color:#e8907f;margin-top:2px}
+  .fl{font-size:12.5px;color:var(--green);margin-top:5px;font-weight:600}
+  .fy{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.5}
+  .roll{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+  .roll th{text-align:left;color:var(--faint);font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:4px 6px;border-bottom:1px solid var(--line)}
+  .roll td{padding:5px 6px;border-bottom:1px solid #28344433;color:#c9d3df;vertical-align:top}
+  .roll .tn{color:var(--faint);font-family:var(--mono);font-size:10.5px}
+  .roll .td{font-family:var(--mono);text-align:right;white-space:nowrap}
+  .roll .td.pos{color:var(--green)} .roll .td.neg{color:var(--red)}
+  .roll .tb{font-family:var(--mono);text-align:right;color:var(--text)}
+  .troom{color:var(--faint);font-size:11px}
+
+  .chip:focus-visible,#audit:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:5px}
+  /* ---------------- stage ---------------- */
+  #stage{max-width:1150px;margin:0 auto;padding:14px 14px 60px}
+  .fadein{animation:fade .5s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  @media(prefers-reduced-motion:reduce){.fadein{animation:none}}
+
+  /* ---------------- hero ---------------- */
+  .hero{padding:64px 10px 30px;max-width:660px}
+  .hero .kicker{font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--gold);text-transform:uppercase}
+  .hero h1{font-family:var(--serif);font-weight:500;font-size:clamp(36px,6vw,56px);line-height:1.08;margin:14px 0 16px;text-wrap:balance}
+  .hero h1 em{font-style:italic;color:var(--gold)}
+  .hero p{color:var(--muted);font-size:16px;max-width:54ch}
+  .btns{display:flex;gap:12px;flex-wrap:wrap;margin-top:28px}
+  .cta{border:1px solid #d9a64866;color:var(--gold);border-radius:7px;padding:9px 20px;font-size:14px;transition:background .15s}
+  .cta:hover{background:var(--gold-dim)}
+  .cta.big{background:var(--gold);color:#131a24;border:none;font-weight:600;font-size:15px;padding:12px 26px}
+  .cta.big:hover{background:#e5b95f}
+  .cta.ghost{border-color:var(--line);color:var(--muted)}
+
+  /* ---------------- scene ---------------- */
+  .scene{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#0c1118}
+  .scene svg{display:block;width:100%;height:auto}
+  /* scenes mount inside .scenewrap; on small portrait screens it becomes a swipeable viewport */
+  .scenewrap{overflow:hidden}
+  @media(max-width:740px) and (orientation:portrait){
+    .scenewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+    .scenewrap::-webkit-scrollbar{display:none}
+    .scenewrap svg{height:62vh;width:auto;max-width:none}
+  }
+  .scene-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:12px 14px;pointer-events:none}
+  .scene-top>*{pointer-events:auto}
+  .backbtn{font-size:12.5px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:5px 12px;background:#0e141cd9}
+  .backbtn:hover{color:var(--text);border-color:var(--faint)}
+  .objective{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;color:var(--muted);
+    background:#0e141cd9;border:1px solid var(--line);border-radius:6px;padding:6px 11px;text-align:right}
+  .objective b{color:var(--gold)}
+
+  /* dialogue bar */
+  .dlg{position:absolute;left:12px;right:12px;bottom:12px;display:flex;gap:12px;align-items:flex-start;
+    background:#10161ff0;border:1px solid #2c394a;border-radius:12px;padding:13px 16px;backdrop-filter:blur(4px);
+    animation:dlgup .35s ease}
+  @keyframes dlgup{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .dlg .pv{flex:none;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;
+    font-family:var(--mono);font-size:12px;font-weight:700}
+  .pv.ph{background:#173340;color:var(--cyan);border:1px solid #72b7cc44}
+  .pv.act{background:#33290f;color:var(--gold);border:1px solid #d9a64844}
+  .pv.aud{background:#3a1f1c;color:var(--red);border:1px solid #e06a5e44}
+  .pv.sys{background:#1d2734;color:var(--muted);border:1px solid var(--line)}
+  .pv.uw{background:#232e3d;color:#aeb9c9;border:1px solid #8b98aa44}
+  .memo{font-size:13px;color:var(--muted);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:8px;padding:9px 13px;margin:2px 0 4px;line-height:1.6}
+  .memo b{color:var(--text);font-family:var(--mono);font-weight:600}
+  .dlg .txt{flex:1;min-width:0}
+  .dlg .who{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:3px}
+  .dlg p{color:#d5dde8;font-size:14.5px}
+  .dlg .num{font-family:var(--mono);color:var(--gold)}
+  .dlg .next{flex:none;align-self:flex-end;border:1px solid #d9a64866;color:var(--gold);border-radius:6px;padding:6px 14px;font-size:12.5px}
+  .dlg .next:hover{background:var(--gold-dim)}
+  /* while a conversation is open, the door button steps aside */
+  .scene:has(.dlg) > .cta.big{opacity:0;pointer-events:none}
+  .scene > .cta.big{transition:opacity .25s}
+
+  /* hotspots inside svg */
+  .hs{cursor:pointer}
+  .hs .ring{fill:#0e141c;stroke:var(--gold);stroke-width:1.5;opacity:.92}
+  .hs text{fill:var(--gold);font-family:var(--mono);font-size:15px;font-weight:700;text-anchor:middle;dominant-baseline:central}
+  .hs.q .ring{stroke:var(--cyan)} .hs.q text{fill:var(--cyan)}
+  .hs .pulse{fill:none;stroke:var(--gold);opacity:.7;animation:pulse 2s ease-out infinite}
+  .hs.q .pulse{stroke:var(--cyan)}
+  @keyframes pulse{from{transform:scale(.6);opacity:.8}to{transform:scale(1.9);opacity:0}}
+  .hs.done .ring{stroke:var(--green)} .hs.done text{fill:var(--green)}
+  .hs.done .pulse{display:none}
+  .hs .cap{font-size:10.5px;letter-spacing:1.6px;font-weight:600;paint-order:stroke;stroke:#0e141c;stroke-width:3px}
+  .hs .tick{display:none}
+  .hs.done .glyph{display:none}
+  .hs.done .tick{display:block}
+  .hs .halo{fill:var(--gold);opacity:0;transform-box:fill-box;transform-origin:center}
+  .hs .evcard text{fill:var(--text);font-family:var(--sans);font-size:14px;font-weight:400;letter-spacing:0;text-anchor:middle;dominant-baseline:auto}
+  .hs .evcard text.hdr{fill:var(--gold);font-family:var(--mono);font-size:9.5px;letter-spacing:1.5px}
+  .hs.q .halo{fill:var(--cyan)}
+  .hs.next .halo{animation:halo 1.1s ease-in-out infinite}
+  @keyframes halo{0%,100%{opacity:.14;transform:scale(1)}50%{opacity:.5;transform:scale(1.6)}}
+  .hs.next .pulse{animation-duration:1.1s}
+  .hs.next .ring{animation:hsFlash 1.1s ease-in-out infinite}
+  @keyframes hsFlash{0%,100%{stroke-width:2}50%{stroke-width:5.5}}
+  .hs.next .cap{font-size:11.5px}
+  @media(prefers-reduced-motion:reduce){.hs.next .ring,.hs.next .halo{animation:none}.hs.next .halo{opacity:.3}}
+  @media(prefers-reduced-motion:reduce){.hs .pulse{animation:none;display:none}}
+  .hs.hidden{display:none}
+
+  /* figure rig, characters are alive: idle bob + blink + arm sway; richer states via data-state */
+  .fig .body,.fig .eyes,.fig .head,.fig .arm-l,.fig .arm-r,.fig .leg-l,.fig .leg-r{transform-box:fill-box}
+  .fig .body{transform-origin:50% 100%;animation:figBob 3.4s ease-in-out infinite}
+  .fig .eyes{transform-origin:50% 50%;animation:figBlink 4.6s linear infinite}
+  .fig .head{transform-origin:50% 88%}
+  .fig .arm-l,.fig .arm-r{transform-origin:50% 6%}
+  .fig .leg-l,.fig .leg-r{transform-origin:50% 4%}
+  .fig .arm-l{animation:figSwayL 3.4s ease-in-out infinite}
+  .fig .arm-r{animation:figSwayR 3.4s ease-in-out infinite}
+  .fig[data-state="talk"] .head{animation:figNod 1.2s ease-in-out infinite}
+  .fig[data-state="talk"] .arm-r{animation:figGesture 1.2s ease-in-out infinite}
+  .fig[data-state="walk"] .leg-l{animation:figStepL .5s ease-in-out infinite}
+  .fig[data-state="walk"] .leg-r{animation:figStepR .5s ease-in-out infinite}
+  .fig[data-state="walk"] .arm-l{animation:figStepR .5s ease-in-out infinite}
+  .fig[data-state="walk"] .arm-r{animation:figStepL .5s ease-in-out infinite}
+  .fig[data-state="walk"] .body{animation:figJog .25s ease-in-out infinite}
+  .fig[data-state="wave"] .arm-r{animation:figWave .7s ease-in-out infinite}
+  .fig[data-state="celebrate"] .arm-l{animation:figCheerL .5s ease-in-out infinite}
+  .fig[data-state="celebrate"] .arm-r{animation:figCheerR .5s ease-in-out infinite}
+  .fig[data-state="celebrate"] .body{animation:figHop .5s ease-in-out infinite}
+  @keyframes figBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.6px)}}
+  @keyframes figBlink{0%,93.9%,98.1%,100%{transform:scaleY(1)}94.6%,97.4%{transform:scaleY(.1)}}
+  @keyframes figSwayL{0%,100%{transform:rotate(2.5deg)}50%{transform:rotate(-2.5deg)}}
+  @keyframes figSwayR{0%,100%{transform:rotate(-2.5deg)}50%{transform:rotate(2.5deg)}}
+  @keyframes figNod{0%,100%{transform:rotate(-1.5deg)}50%{transform:rotate(2.5deg)}}
+  @keyframes figGesture{0%,100%{transform:rotate(0)}50%{transform:rotate(-38deg)}}
+  @keyframes figStepL{0%,100%{transform:rotate(18deg)}50%{transform:rotate(-18deg)}}
+  @keyframes figStepR{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(18deg)}}
+  @keyframes figJog{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.2px)}}
+  @keyframes figWave{0%,100%{transform:rotate(-150deg)}50%{transform:rotate(-178deg)}}
+  @keyframes figCheerL{0%,100%{transform:rotate(160deg)}50%{transform:rotate(178deg)}}
+  @keyframes figCheerR{0%,100%{transform:rotate(-160deg)}50%{transform:rotate(-178deg)}}
+  .thought{animation:thoughtFloat 3.2s ease-in-out infinite;transition:opacity .25s}
+  @keyframes thoughtFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+  .fig[data-state="walk"]+.thought{opacity:0}
+  @media(prefers-reduced-motion:reduce){.thought{animation:none}}
+
+  @media(prefers-reduced-motion:reduce){.fig .body,.fig .eyes,.fig .head,.fig .arm-l,.fig .arm-r,.fig .leg-l,.fig .leg-r{animation:none!important}}
+
+
+  /* map effects */
+  .room-g{cursor:pointer}
+  .room-g.locked{cursor:not-allowed}
+  .room-g .glowrect{opacity:0;transition:opacity .3s}
+  .room-g:not(.locked):hover .glowrect{opacity:1}
+  .doorglow{animation:doorglow 1.8s ease-in-out infinite}
+  @keyframes doorglow{0%,100%{opacity:.25}50%{opacity:.85}}
+  .lamp-red{animation:alarmpulse 1.1s ease-in-out infinite}
+  @keyframes alarmpulse{0%,100%{opacity:.25}50%{opacity:.95}}
+  .rain line{stroke:#7fa0c0;stroke-width:1.2;opacity:.5}
+  .rain{animation:rainfall .7s linear infinite}
+  @keyframes rainfall{from{transform:translateY(-30px)}to{transform:translateY(30px)}}
+  @media(prefers-reduced-motion:reduce){.rain,.doorglow,.lamp-red{animation:none}}
+  .ticker-tape{animation:tick 14s linear infinite}
+  @keyframes tick{from{transform:translateX(0)}to{transform:translateX(-600px)}}
+  .drawline{stroke-dasharray:1000;stroke-dashoffset:1000;animation:draw 2.2s ease forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @media(prefers-reduced-motion:reduce){.drawline{animation:none;stroke-dashoffset:0}.ticker-tape{animation:none}}
+  .wf-bar{transition:height .8s ease, y .8s ease, opacity .5s}
+
+  .room-g:focus{outline:none}
+  .room-g:focus-visible .glowrect{opacity:1}
+  /* ---------------- modal ---------------- */
+  #modal-root{position:fixed;inset:0;z-index:60;display:none}
+  #modal-root.open{display:block}
+  .mback{position:absolute;inset:0;background:#05080cd0;backdrop-filter:blur(3px)}
+  .mwrap{position:absolute;inset:0;overflow-y:auto;display:grid;place-items:start center;padding:6vh 16px 60px;pointer-events:none}
+  .mcard{pointer-events:auto;width:min(640px,100%);background:linear-gradient(#1a2230,#161e29);
+    border:1px solid #d9a64840;border-radius:14px;padding:22px 24px;animation:mup .3s ease}
+  @keyframes mup{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .mcard .qk{font-family:var(--mono);font-size:10.5px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:9px}
+  .mcard h4{font-family:var(--serif);font-weight:500;font-size:20px;margin-bottom:10px}
+  .mcard .q{font-size:15.5px;margin-bottom:14px}
+  .mcard p{color:#c9d3df;font-size:14px}
+  .mcard p+p{margin-top:8px}
+  .mcard .num{font-family:var(--mono);color:var(--gold)}
+  .opts{display:flex;flex-direction:column;gap:8px}
+  .opt{text-align:left;border:1px solid var(--line);border-radius:8px;background:var(--panel2);
+    padding:10px 13px;font-size:13.5px;color:#cdd6e2;display:flex;gap:10px;align-items:flex-start;transition:border-color .15s,background .15s}
+  .opt .key{font-family:var(--mono);font-size:10.5px;color:var(--faint);border:1px solid var(--line);border-radius:4px;padding:1px 6px;margin-top:1px;flex:none}
+  .opt:not(:disabled):hover{border-color:#d9a64866;background:#202b3a}
+  .opt.right{border-color:#63b38088;background:var(--green-dim);color:var(--text)}
+  .opt.right .key{border-color:#63b38088;color:var(--green)}
+  .opt.wrong{border-color:#e06a5e77;background:var(--red-dim);animation:shake .3s}
+  .opt:disabled{cursor:default;opacity:.5}
+  .opt.right:disabled,.opt.wrong:disabled{opacity:1}
+  @keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  .verdict{margin-top:12px;font-size:13.5px;line-height:1.55;border-radius:8px;padding:10px 13px}
+  .verdict.good{background:var(--green-dim);border:1px solid #63b38044;color:#cfe6d6}
+  .verdict.bad{background:var(--red-dim);border:1px solid #e06a5e3d;color:#eccfc9}
+  .cite{display:inline-block;font-family:var(--mono);font-size:10.5px;border:1px solid #d9a64855;color:var(--gold);border-radius:4px;padding:1px 7px;margin:6px 6px 0 0}
+  .mfoot{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:16px}
+  .file-list{list-style:none;margin:10px 0 4px;display:flex;flex-direction:column;gap:6px}
+  .file-list li{font-size:13.5px;color:#c3cddb;padding-left:16px;position:relative}
+  .file-list li::before{content:"·";position:absolute;left:2px;color:var(--gold)}
+  .mclose{position:absolute;top:10px;right:14px;color:var(--faint);font-size:20px;padding:4px 8px}
+  .mclose:hover{color:var(--text)}
+  .mcard-holder{position:relative;pointer-events:auto;width:min(640px,100%)}
+
+  /* end overlay content */
+  .grade{font-family:var(--serif);font-size:32px;margin:6px 0 8px}
+  .rules{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+
+  .mcard:focus{outline:none}
+  .mcard:focus-visible{outline:2px solid var(--gold, #d9a648);outline-offset:2px}
+  /* ---------------- light mode ---------------- */
+  [data-theme="light"]{
+    --ink:#eef1f6; --panel:#ffffff; --panel2:#f3f5f9; --line:#1c243026;
+    --text:#1c2430; --muted:#5b6779; --faint:#8a94a6;
+    --gold:#a97b1c; --gold-dim:#a97b1c1a; --cyan:#1f7d99; --green:#2e7d4f;
+    --red:#c2473a; --red-dim:#c2473a14; --green-dim:#2e7d4f14;
+  }
+  [data-theme="light"] #hud{background:#f4f6fae8}
+  [data-theme="light"] .scene{background:#dfe6ef;border-color:#c3ccd8}
+  [data-theme="light"] .backbtn,[data-theme="light"] .objective{background:#ffffffd9}
+  [data-theme="light"] .dlg{background:#fffffff0;border-color:#c3ccd8}
+  [data-theme="light"] .dlg p{color:#2a3442}
+  [data-theme="light"] .mcard{background:#ffffff;border-color:#a97b1c55}
+  [data-theme="light"] .mcard p{color:#2a3442}
+  [data-theme="light"] .opt{color:#2a3442}
+  [data-theme="light"] .opt:not(:disabled):hover{background:#eef2f8;border-color:#a97b1c66}
+  [data-theme="light"] .pv.ph{background:#d8ecf3}
+  [data-theme="light"] .pv.act{background:#f3e8cf}
+  [data-theme="light"] .pv.aud{background:#f7e0dc}
+  [data-theme="light"] .pv.sys{background:#e4e9f0}
+  [data-theme="light"] .pv.uw{background:#e4e9f0;color:#41506a}
+  [data-theme="light"] #audit .bar{background:#d5dce5}
+  [data-theme="light"] .hs .ring{fill:#ffffff}
+  [data-theme="light"] .hs .cap{stroke:#eef1f6}
+  [data-theme="light"] .verdict.good{color:#1d5a36}
+  [data-theme="light"] .verdict.bad{color:#8f3a30}
+  [data-theme="light"] .fa{color:#b34a3c}
+  [data-theme="light"] .roll td{color:#2a3442;border-bottom-color:#1c243015}
+  [data-theme="light"] .thought rect,[data-theme="light"] .thought circle{stroke:#c3ccd8;stroke-width:1}
+  [data-theme="light"] .cta.big{color:#ffffff}
+  [data-theme="light"] .file-list li{color:#2a3442}
+  [data-theme="light"] [fill="#0a0f16"]{fill:#dbe4ee}
+  [data-theme="light"] [stroke="#0a0f16"]{stroke:#dbe4ee}
+  [data-theme="light"] [fill="#111926"]{fill:#e8edf4}
+  [data-theme="light"] [stroke="#111926"]{stroke:#e8edf4}
+  [data-theme="light"] [fill="#0d1420"]{fill:#c3ccd9}
+  [data-theme="light"] [stroke="#0d1420"]{stroke:#c3ccd9}
+  [data-theme="light"] [fill="#1b2736"]{fill:#dfe7f1}
+  [data-theme="light"] [stroke="#1b2736"]{stroke:#dfe7f1}
+  [data-theme="light"] [fill="#121924"]{fill:#e2e7ee}
+  [data-theme="light"] [stroke="#121924"]{stroke:#e2e7ee}
+  [data-theme="light"] [fill="#1a2432"]{fill:#f2f5f9}
+  [data-theme="light"] [stroke="#1a2432"]{stroke:#f2f5f9}
+  [data-theme="light"] [fill="#1c2634"]{fill:#eef2f7}
+  [data-theme="light"] [stroke="#1c2634"]{stroke:#eef2f7}
+  [data-theme="light"] [fill="#243347"]{fill:#c2cfdf}
+  [data-theme="light"] [stroke="#243347"]{stroke:#c2cfdf}
+  [data-theme="light"] [fill="#31445e"]{fill:#a9b9cf}
+  [data-theme="light"] [stroke="#31445e"]{stroke:#a9b9cf}
+  [data-theme="light"] [fill="#2c394a"]{fill:#b6c1cf}
+  [data-theme="light"] [stroke="#2c394a"]{stroke:#b6c1cf}
+  [data-theme="light"] [fill="#22304288"]{fill:#1c243022}
+  [data-theme="light"] [stroke="#22304288"]{stroke:#1c243022}
+  [data-theme="light"] [fill="#22304244"]{fill:#1c243015}
+  [data-theme="light"] [stroke="#22304244"]{stroke:#1c243015}
+  [data-theme="light"] [fill="#141b26"]{fill:#dfe6ef}
+  [data-theme="light"] [stroke="#141b26"]{stroke:#dfe6ef}
+  [data-theme="light"] [fill="#1b2534"]{fill:#e9eef5}
+  [data-theme="light"] [stroke="#1b2534"]{stroke:#e9eef5}
+  [data-theme="light"] [fill="#232c3a"]{fill:#cfd7e2}
+  [data-theme="light"] [stroke="#232c3a"]{stroke:#cfd7e2}
+  [data-theme="light"] [fill="#12192455"]{fill:#94a3b755}
+  [data-theme="light"] [stroke="#12192455"]{stroke:#94a3b755}
+  [data-theme="light"] [fill="#27374e"]{fill:#aacde6}
+  [data-theme="light"] [stroke="#27374e"]{stroke:#aacde6}
+  [data-theme="light"] [fill="#c7d3e2"]{fill:#aacde6}
+  [data-theme="light"] [stroke="#c7d3e2"]{stroke:#aacde6}
+  [data-theme="light"] [fill="#202b3c"]{fill:#eef2f8}
+  [data-theme="light"] [stroke="#202b3c"]{stroke:#eef2f8}
+  [data-theme="light"] [fill="#26354c"]{fill:#c6d2e2}
+  [data-theme="light"] [stroke="#26354c"]{stroke:#c6d2e2}
+  [data-theme="light"] [fill="#131a25"]{fill:#dfe6ef}
+  [data-theme="light"] [stroke="#131a25"]{stroke:#dfe6ef}
+  [data-theme="light"] [fill="#192230"]{fill:#e9eef5}
+  [data-theme="light"] [stroke="#192230"]{stroke:#e9eef5}
+  [data-theme="light"] [fill="#20293a"]{fill:#cfd7e2}
+  [data-theme="light"] [stroke="#20293a"]{stroke:#cfd7e2}
+  [data-theme="light"] [fill="#2a2419"]{fill:#e3d5b0}
+  [data-theme="light"] [stroke="#2a2419"]{stroke:#e3d5b0}
+  [data-theme="light"] [fill="#4a3d22"]{fill:#b09a6a}
+  [data-theme="light"] [stroke="#4a3d22"]{stroke:#b09a6a}
+  [data-theme="light"] [fill="#a8996f"]{fill:#6b5a34}
+  [data-theme="light"] [stroke="#a8996f"]{stroke:#6b5a34}
+  [data-theme="light"] [fill="#7a6c45"]{fill:#6b5a34}
+  [data-theme="light"] [stroke="#7a6c45"]{stroke:#6b5a34}
+  [data-theme="light"] [fill="#3a2f1d"]{fill:#c9a86d}
+  [data-theme="light"] [stroke="#3a2f1d"]{stroke:#c9a86d}
+  [data-theme="light"] [fill="#2b2315"]{fill:#8a744e}
+  [data-theme="light"] [stroke="#2b2315"]{stroke:#8a744e}
+  [data-theme="light"] [fill="#121a22"]{fill:#e2e9ef}
+  [data-theme="light"] [stroke="#121a22"]{stroke:#e2e9ef}
+  [data-theme="light"] [fill="#17222b"]{fill:#eaf0f4}
+  [data-theme="light"] [stroke="#17222b"]{stroke:#eaf0f4}
+  [data-theme="light"] [fill="#1f2a33"]{fill:#d0d9df}
+  [data-theme="light"] [stroke="#1f2a33"]{stroke:#d0d9df}
+  [data-theme="light"] [fill="#2b3547"]{fill:#bfcbdd}
+  [data-theme="light"] [stroke="#2b3547"]{stroke:#bfcbdd}
+  [data-theme="light"] [fill="#33435e"]{fill:#a9b9cf}
+  [data-theme="light"] [stroke="#33435e"]{stroke:#a9b9cf}
+  [data-theme="light"] [fill="#2c3a52"]{fill:#b3c0d6}
+  [data-theme="light"] [stroke="#2c3a52"]{stroke:#b3c0d6}
+  [data-theme="light"] [fill="#101724"]{fill:#dde4ef}
+  [data-theme="light"] [stroke="#101724"]{stroke:#dde4ef}
+  [data-theme="light"] [fill="#141d2e"]{fill:#e7edf6}
+  [data-theme="light"] [stroke="#141d2e"]{stroke:#e7edf6}
+  [data-theme="light"] [fill="#1b2536"]{fill:#ccd6e4}
+  [data-theme="light"] [stroke="#1b2536"]{stroke:#ccd6e4}
+  [data-theme="light"] [fill="#0d1522"]{fill:#f7fafc}
+  [data-theme="light"] [stroke="#0d1522"]{stroke:#f7fafc}
+  [data-theme="light"] [fill="#0b111c"]{fill:#d6dde8}
+  [data-theme="light"] [stroke="#0b111c"]{stroke:#d6dde8}
+  [data-theme="light"] [fill="#182234"]{fill:#f4f7fb}
+  [data-theme="light"] [stroke="#182234"]{stroke:#f4f7fb}
+  [data-theme="light"] [fill="#1e2a3e"]{fill:#eef2f8}
+  [data-theme="light"] [stroke="#1e2a3e"]{stroke:#eef2f8}
+  [data-theme="light"] [fill="#3b4a5f"]{fill:#9fadc0}
+  [data-theme="light"] [stroke="#3b4a5f"]{stroke:#9fadc0}
+  [data-theme="light"] [fill="#101a1c"]{fill:#e0e9e9}
+  [data-theme="light"] [stroke="#101a1c"]{stroke:#e0e9e9}
+  [data-theme="light"] [fill="#152224"]{fill:#eaf2f2}
+  [data-theme="light"] [stroke="#152224"]{stroke:#eaf2f2}
+  [data-theme="light"] [fill="#1d2b2d"]{fill:#cfdcdc}
+  [data-theme="light"] [stroke="#1d2b2d"]{stroke:#cfdcdc}
+  [data-theme="light"] [fill="#20304a"]{fill:#b9c8e0}
+  [data-theme="light"] [stroke="#20304a"]{stroke:#b9c8e0}
+  [data-theme="light"] [fill="#14202c"]{fill:#dfe7f1}
+  [data-theme="light"] [stroke="#14202c"]{stroke:#dfe7f1}
+  [data-theme="light"] [fill="#182430"]{fill:#f2f5f9}
+  [data-theme="light"] [stroke="#182430"]{stroke:#f2f5f9}
+  [data-theme="light"] [fill="#22333a"]{fill:#c6d6d6}
+  [data-theme="light"] [stroke="#22333a"]{stroke:#c6d6d6}
+  [data-theme="light"] [fill="#2c3f48"]{fill:#a9bec6}
+  [data-theme="light"] [stroke="#2c3f48"]{stroke:#a9bec6}
+  [data-theme="light"] [fill="#120f16"]{fill:#d8d5e0}
+  [data-theme="light"] [stroke="#120f16"]{stroke:#d8d5e0}
+  [data-theme="light"] [fill="#181420"]{fill:#e4e1ea}
+  [data-theme="light"] [stroke="#181420"]{stroke:#e4e1ea}
+  [data-theme="light"] [fill="#201a2b"]{fill:#c9c4d4}
+  [data-theme="light"] [stroke="#201a2b"]{stroke:#c9c4d4}
+  [data-theme="light"] [fill="#131c2c"]{fill:#b9c8dd}
+  [data-theme="light"] [stroke="#131c2c"]{stroke:#b9c8dd}
+  [data-theme="light"] [fill="#0d1017"]{fill:#f4f2f6}
+  [data-theme="light"] [stroke="#0d1017"]{stroke:#f4f2f6}
+  [data-theme="light"] [fill="#3a2c33"]{fill:#c9b3bc}
+  [data-theme="light"] [stroke="#3a2c33"]{stroke:#c9b3bc}
+  [data-theme="light"] [fill="#241a1e"]{fill:#ecdfe2}
+  [data-theme="light"] [stroke="#241a1e"]{stroke:#ecdfe2}
+  [data-theme="light"] [fill="#2c222c"]{fill:#d8ccd6}
+  [data-theme="light"] [stroke="#2c222c"]{stroke:#d8ccd6}
+  [data-theme="light"] [fill="#8b6b74"]{fill:#7a5560}
+  [data-theme="light"] [stroke="#8b6b74"]{stroke:#7a5560}
+  [data-theme="light"] [fill="#1b2b22"]{fill:#dff0e6}
+  [data-theme="light"] [stroke="#1b2b22"]{stroke:#dff0e6}
+  [data-theme="light"] [fill="#0b0f15"]{fill:#4a5568}
+  [data-theme="light"] [stroke="#0b0f15"]{stroke:#4a5568}
+  [data-theme="light"] [fill="#5d6b7e"]{fill:#66738a}
+  [data-theme="light"] [stroke="#5d6b7e"]{stroke:#66738a}
+  [data-theme="light"] [fill="#8b98aa"]{fill:#54637a}
+  [data-theme="light"] [stroke="#8b98aa"]{stroke:#54637a}
+  [data-theme="light"] [fill="#aeb9c8"]{fill:#4d5a6e}
+  [data-theme="light"] [stroke="#aeb9c8"]{stroke:#4d5a6e}
+  [data-theme="light"] [fill="#4a586b"]{fill:#8b98aa}
+  [data-theme="light"] [stroke="#4a586b"]{stroke:#8b98aa}
+  [data-theme="light"] [fill="#c9d3df"]{fill:#2a3442}
+  [data-theme="light"] [stroke="#c9d3df"]{stroke:#2a3442}
+  [data-theme="light"] [fill="#cdd6e2"]{fill:#2a3442}
+  [data-theme="light"] [stroke="#cdd6e2"]{stroke:#2a3442}
+  [data-theme="light"] [fill="#d5dde8"]{fill:#2a3442}
+  [data-theme="light"] [stroke="#d5dde8"]{stroke:#2a3442}
+  [data-theme="light"] [fill="#c3cddb"]{fill:#2a3442}
+  [data-theme="light"] [stroke="#c3cddb"]{stroke:#2a3442}
+  [data-theme="light"] [fill="#e7ecf3"]{fill:#1c2430}
+  [data-theme="light"] [stroke="#e7ecf3"]{stroke:#1c2430}
+  [data-theme="light"] [fill="#e9eef5"]{fill:#ffffff}
+  [data-theme="light"] [stroke="#e9eef5"]{stroke:#ffffff}
+  [data-theme="light"] [fill="#232e3d"]{fill:#d5dce5}
+  [data-theme="light"] [stroke="#232e3d"]{stroke:#d5dce5}
+  [data-theme="light"] [fill="#4a5d78"]{fill:#8fa3c0}
+  [data-theme="light"] [stroke="#4a5d78"]{stroke:#8fa3c0}
+  [data-theme="light"] [fill="#c9b06b"]{fill:#8a6f2f}
+  [data-theme="light"] [stroke="#c9b06b"]{stroke:#8a6f2f}
+  [data-theme="light"] [fill="#1e2a3a"]{fill:#b9c3d2}
+  [data-theme="light"] [stroke="#1e2a3a"]{stroke:#b9c3d2}
+  [data-theme="light"] [fill="#1b2431"]{fill:#b9c3d2}
+  [data-theme="light"] [stroke="#1b2431"]{stroke:#b9c3d2}
+  [data-theme="light"] [fill="#173340"]{fill:#d8ecf3}
+  [data-theme="light"] [stroke="#173340"]{stroke:#d8ecf3}
+
+  /* ---------------- mobile ---------------- */
+  @media(max-width:740px){
+    #hud{padding:8px 12px;gap:8px}
+    #hud .brand{font-size:15px}
+    #hud .where{display:none}
+    #audit{position:static;margin-left:auto}
+    .dirbtn{padding:2px 8px;font-size:9.5px}
+    #ledgerchips{order:9;width:100%;margin-left:0;gap:9px}
+    #stage{padding:10px 8px 40px}
+    .hero{padding:34px 6px 20px}
+    .hero p{font-size:14.5px}
+    .dlg{left:6px;right:6px;bottom:6px;padding:9px 10px;gap:8px}
+    .dlg p{font-size:12.5px}
+    .dlg .pv{width:30px;height:30px;font-size:10px}
+    .mwrap{padding:3vh 8px 40px}
+    .mcard{padding:16px 15px}
+    .books-callout{width:min(300px,86vw)}
+  }
+  #mobiletip{display:none;align-items:flex-start;gap:10px;margin:8px 8px 0;padding:9px 12px;border:1px solid #d9a64855;border-radius:10px;
+    background:var(--gold-dim);color:var(--muted);font-size:12.5px;line-height:1.5}
+  #mobiletip strong{color:var(--text)}
+  #mobiletip button{margin-left:auto;flex:none;font-size:16px;line-height:1;color:var(--muted);background:none;border:none;cursor:pointer;padding:0 2px}
+</style>
+
+<div id="hud">
+  <span class="brand">The <em>Variable</em> Fee</span>
+  <span class="where" id="whereLabel">Learning Variable Fee Assurance in Mutual & Torres Assurance House</span>
+  <button id="dirBtn" class="dirbtn" title="Building directory: the paragraphs behind each room">ⓘ directory</button>
+  <button id="themeBtn" class="dirbtn" title="Switch between light and dark mode">☀ light</button>
+  <button id="restartBtn" class="dirbtn" title="Restart the game from the beginning">↺ restart</button>
+  <button id="quizBtn" class="dirbtn" title="Quiz library: retake the questions you missed and earn back the mastery they carry">✎ quiz</button>
+  <div id="ledgerchips"></div>
+  <div id="audit" role="button" tabindex="0" title="Case mastery: earned one right first-try answer at a time. Click to open the audit file."><span>mastery</span><div class="bar"><i id="auditBar" style="width:0%"></i></div><b id="auditVal">0</b></div>
+</div>
+<div id="mobiletip"><span>📱 <strong>Playing on a phone:</strong> swipe rooms sideways, the glow marks your next step. Rotate for the full view.</span><button aria-label="Dismiss">×</button></div>
+<div id="stage"></div>
+<div id="modal-root"><div class="mback"></div><div class="mwrap" id="mwrap"></div></div>
+
+<script>
+'use strict';
+/* ================= state ================= */
+const KEY='vfa-house-v2'; /* v2: mastery is earned from zero, capstone cases added */
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fmt = v => (Math.round(v*10)/10).toLocaleString('en-US',{minimumFractionDigits:(v%1===0?0:1),maximumFractionDigits:1});
+/* mastery economy: 19 room questions x 4 + 2 capstone cases x 12 = 100 */
+const QUESTION_PTS=4, CAPSTONE_PTS=12;
+let S={done:{},score:0,started:false};
+try{const j=JSON.parse(localStorage.getItem(KEY)); if(j&&j.done)S=j;}catch(e){}
+S.progress=S.progress||{};
+S.mistakes=S.mistakes||[];
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}};
+function prog(id){ if(!S.progress)S.progress={}; return S.progress[id]||(S.progress[id]={}); }
+
+const ROOM_ORDER=['lobby','underwriting','studio','market','release','storm'];
+const ROOM_NAMES={lobby:'Reception',underwriting:'Underwriting office',studio:'Actuarial studio',market:'Market room',release:'Release desk',storm:'The storm attic'};
+function unlockedCount(){let n=1;for(const id of ROOM_ORDER){if(S.done[id])n=Math.max(n,ROOM_ORDER.indexOf(id)+2);}return Math.min(n,6);}
+
+/* ledger, rebuilt from completed rooms */
+const CHECK={
+  base:{account:0,ra:0,csm:0,lc:0,pnl:0},
+  studio:{account:1000,ra:5,csm:20,lc:0,pnl:0},
+  market:{account:1120,ra:5,csm:23,lc:0,pnl:-1},
+  release:{account:1120,ra:2.5,csm:11.5,lc:0,pnl:13},
+  storm:{account:840,ra:0,csm:0,lc:0,pnl:12.5},
+};
+let L={...CHECK.base};
+function ledgerFromState(){
+  L={...CHECK.base};
+  for(const k of ['studio','market','release','storm']) if(S.done[k]) L={...CHECK[k]};
+  const p=S.progress||{};
+  if(!S.done.studio&&p.studio&&p.studio.paid){L.account+=1000;L.ra+=5;L.csm+=20;}
+  if(!S.done.market&&p.market){const n=p.market.doneN||0;const ds=[{account:120},{csm:4},{csm:-1},{pnl:-1},null];
+    for(let i=0;i<n;i++){const d=ds[i];if(d)for(const k in d)L[k]+=d[k];}}
+  if(!S.done.release&&p.release){if(p.release.valve){L.csm-=11.5;L.pnl+=11.5;}if(p.release.ra){L.ra-=2.5;L.pnl+=2.5;}}
+  if(!S.done.storm&&p.storm){const s=p.storm.step||0;
+    if(s>=3)L={...CHECK.storm};
+    else{if(s>=1){L.account-=280;L.csm-=11.5;L.lc+=7;L.pnl-=7;}if(s>=2){L.lc-=4;L.pnl+=4;}}}
+  for(const k in L)L[k]=Math.round(L[k]*100)/100;
+}
+ledgerFromState();
+
+function renderChips(){
+  const c=document.getElementById('ledgerchips');
+  if(L.account===0&&L.csm===0&&!S.done.studio){c.innerHTML='';return;}
+  c.innerHTML =
+    chip('Pool',L.account,'acct')+chip('RA',L.ra,'ra')+chip('CSM',L.csm,'csm','hot')
+    +(L.lc>0?chip('LC',L.lc,'lc','neg'):'')
+    +chip('P&L',L.pnl,'pnl',L.pnl<0?'neg':'');
+  function chip(l,v,id,cls){return `<div class="chip ${cls||''}" id="chip-${id}" role="button" tabindex="0" title="Click for the roll-forward" aria-label="${l} ${fmt(v)}, open the roll-forward"><span>${l}</span><b>${fmt(v)}</b></div>`;}
+  const KEYMAP={acct:'account',ra:'ra',csm:'csm',lc:'lc',pnl:'pnl'};
+  c.querySelectorAll('.chip').forEach(elc=>{
+    const open=()=>showComponent(KEYMAP[elc.id.replace('chip-','')]);
+    elc.onclick=open;
+    elc.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}};
+  });
+}
+function showBooksCallout(){
+  if(S.seenBooks)return;
+  S.seenBooks=1;save();
+  const chips=document.getElementById('ledgerchips');
+  if(!chips||!chips.children.length)return;
+  const hud=document.getElementById('hud');
+  const c=el('div','books-callout','<button class="bc-x" aria-label="Dismiss">×</button><b>Your books just opened.</b>These numbers evolve with every decision you make. Click any of them to see its full roll-forward.');
+  hud.append(c);
+  /* aim the arrow at the middle of the ledger chips */
+  const center=chips.offsetLeft+chips.offsetWidth/2;
+  c.style.right=Math.max(8,hud.clientWidth-center-52)+'px';
+  const kill=()=>c.remove();
+  c.onclick=kill;
+  setTimeout(kill,14000);
+}
+function applyDeltas(d,force){
+  if(!d)return;
+  for(const k in d)L[k]=Math.round((L[k]+d[k])*100)/100;
+  renderChips();
+  showBooksCallout();
+  for(const k in d){const m={account:'acct',ra:'ra',csm:'csm',lc:'lc',pnl:'pnl'}[k];
+    const e=document.getElementById('chip-'+m); if(e)e.classList.add('flash');}
+}
+function setAudit(){
+  document.getElementById('auditVal').textContent=S.score;
+  document.getElementById('auditBar').style.width=Math.max(0,S.score)+'%';
+}
+/* mastery is earned, never taken away: a first-try answer banks its points, a miss
+   banks nothing and files a finding whose points come back through the retake */
+function award(pts){ S.score=Math.min(100,S.score+(pts||QUESTION_PTS)); setAudit(); save(); }
+function penalty(active){ if(!active)return; save(); }
+function setWhere(t){document.getElementById('whereLabel').textContent=t;}
+
+/* ================= modal system ================= */
+const mroot=document.getElementById('modal-root'), mwrap=document.getElementById('mwrap');
+let MODAL_LASTFOCUS=null;
+function openModal(node,closable){
+  mwrap.innerHTML='';
+  if(document.activeElement&&document.activeElement!==document.body)MODAL_LASTFOCUS=document.activeElement;
+  const holder=document.createElement('div');holder.className='mcard-holder';
+  holder.append(node);
+  if(closable){
+    const x=document.createElement('button');x.className='mclose';x.innerHTML='×';x.setAttribute('aria-label','Close');
+    x.onclick=closeModal;holder.append(x);
+    mroot.querySelector('.mback').onclick=closeModal;
+  } else mroot.querySelector('.mback').onclick=null;
+  mwrap.append(holder);mroot.classList.add('open');
+  /* focus lands on the card so keyboard and screen-reader users follow the dialog */
+  node.setAttribute('tabindex','-1');
+  node.setAttribute('role','dialog');
+  node.setAttribute('aria-modal','true');
+  try{node.focus({preventScroll:true});}catch(e){}
+  mroot.onkeydown=closable?e=>{if(e.key==='Escape')closeModal();}:null;
+}
+function closeModal(){
+  mroot.classList.remove('open');mwrap.innerHTML='';mroot.onkeydown=null;
+  if(MODAL_LASTFOCUS&&MODAL_LASTFOCUS.isConnected){try{MODAL_LASTFOCUS.focus({preventScroll:true});}catch(e){}}
+  MODAL_LASTFOCUS=null;
+}
+const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+
+function teach(title,html,cites){
+  return new Promise(res=>{
+    const card=el('div','mcard');
+    card.append(el('div','qk','Teaching point'));
+    card.append(el('h4','',title));
+    card.insertAdjacentHTML('beforeend',html);
+    if(cites)card.append(el('div','',cites.map(c=>`<span class="cite">${c}</span>`).join('')));
+    const f=el('div','mfoot');const b=el('button','cta','Got it');
+    b.onclick=()=>{closeModal();res();};f.append(b);card.append(f);
+    openModal(card,true);
+    mroot.querySelector('.mback').onclick=()=>{closeModal();res();};
+    card.parentElement && null;
+  });
+}
+function showDirectory(){
+  return teach('Building directory: the paragraphs that run this house',
+    `<p><strong>Reception</strong>: what a direct-participation contract is (B101).<br>
+     <strong>Underwriting</strong>: the three-part eligibility test, assessed at inception with no bright lines (B101, B102, B107–B108), and the reinsurance exclusion (B109).<br>
+     <strong>Actuarial studio</strong>: variable fee &amp; day-one CSM, with the RA netted inside the fulfilment cash flows (B104, para 38), investment components (para 85).<br>
+     <strong>Market room</strong>: routing: policyholder share to IFIE (B111), entity share to CSM (para 45(b)/B112), future-service changes to CSM at current rates (para 45(c)/B113), experience to P&amp;L, and the documented risk-mitigation exception (B115–B118).<br>
+     <strong>Release desk</strong>: coverage units incl. investment service (para 45(e), Appendix A, B119, B119A), RA release (para 81).<br>
+     <strong>Storm attic</strong>: onerous contracts and the loss component (para 47–48, para 50–52, para 103(b)).</p>
+     <hr style="border:none;border-top:1px solid #2c394a;margin:14px 0">
+     <p><strong>Assumptions of this house.</strong> The numbers are a teaching simplification of IFRS 17 (as issued; jurisdictional adoptions such as AASB 17 are word-identical here). One contract stands in for a group of contracts. Two annual periods, no discounting shown separately, and the time value of money is folded into the fair-value movements. Fees are 20% of returns; Ana's account is credited 80% of returns. The RA releases evenly over the two years, and its whole movement is shown in the service result (the para 81 disaggregation choice is not taken). No OCI option is used. Out of scope: the premium allocation approach, transition, reinsurance measurement, and disclosure requirements.</p>`);
+}
+function ledgerHistory(){
+  const H=[]; const p=S.progress||{};
+  const add=(room,label,d)=>H.push({room,label,d});
+  if(S.done.studio||(p.studio&&p.studio.paid)){
+    add('Studio','Premium of 1,000 into the fund pool',{account:1000});
+    add('Studio','Risk adjustment set up at inception',{ra:5});
+    add('Studio','Day-one CSM: the variable fee of 20 (35 − 10 − 5)',{csm:20});}
+  const wires=S.done.market?5:(p.market?(p.market.doneN||0):0);
+  const WD=[['Fund return 120: Ana’s account +96, entity share +24',{account:120}],
+            ['Entity share of pool gains lifts future fees',{csm:4}],
+            ['Mortality study worsens future claims',{csm:-1}],
+            ['Claims miss: actual 4.0 vs expected 3.0',{pnl:-1}],
+            ['Rates what-if: nothing booked',null]];
+  for(let i=0;i<wires;i++){if(WD[i][1])add('Market · event '+(i+1),WD[i][0],WD[i][1]);}
+  const pr=p.release||{};
+  if(S.done.release||pr.valve)add('Release','CSM release to revenue: 23.0 × ½',{csm:-11.5,pnl:11.5});
+  if(S.done.release||pr.ra)add('Release','RA release for expired risk',{ra:-2.5,pnl:2.5});
+  const st=S.done.storm?3:(p.storm?(p.storm.step||0):0);
+  if(st>=1)add('Storm','Crash: pool −25%. CSM wiped. Loss booked',{account:-280,csm:-11.5,lc:7,pnl:-7});
+  if(st>=2)add('Storm','Recovery reverses the loss component',{lc:-4,pnl:4});
+  if(S.done.storm){
+    add('Storm','Year two: last RA released as the remaining risk expires',{ra:-2.5,pnl:2.5});
+    add('Storm','Maturity: LC runs off, out of revenue, offset in expenses, net nil',{lc:-3});}
+  return H;
+}
+const COMP_NAMES={account:'Underlying items (the fund pool)',ra:'Risk adjustment',csm:'CSM (unearned profit)',lc:'Loss component',pnl:'P&L booked to date'};
+function showComponent(k){
+  const H=ledgerHistory().filter(h=>h.d&&h.d[k]!==undefined);
+  const card=el('div','mcard');
+  card.append(el('div','qk','Roll-forward'));
+  card.append(el('h4','',COMP_NAMES[k]+' · now '+fmt(L[k])));
+  if(k==='account')card.insertAdjacentHTML('beforeend','<p class="fy">This chip is the gross fund pool. Ana’s account is her contractual share of it; the rest is the entity’s accrued fee share. The year-one bridge: pool 1,120 = her account 1,096 + fee share 24.</p>');
+  if(!H.length){card.insertAdjacentHTML('beforeend','<p>Nothing has been booked here yet. Play on and come back.</p>');}
+  else{
+    let bal=0;
+    const steps=H.map(h=>{bal=Math.round((bal+h.d[k])*100)/100;return{label:h.label,room:h.room,delta:h.d[k],to:bal};});
+    const n=steps.length, vals=[0].concat(steps.map(s=>s.to));
+    const lo=Math.min(0,...vals), hi=Math.max(1,...vals);
+    const Wd=520,Ht=150,pad=12;
+    const y=v=>pad+(hi-v)/(hi-lo||1)*(Ht-2*pad);
+    const slot=(Wd-20)/n, bw=Math.min(70,slot*0.7);
+    let bars='';
+    steps.forEach((s,i)=>{
+      const x=10+i*slot+(slot-bw)/2;
+      const a=y(s.to), b2=y(s.to-s.delta);
+      const y1=Math.min(a,b2), hpx=Math.max(2,Math.abs(a-b2));
+      bars+=`<rect x="${x}" y="${y1}" width="${bw}" height="${hpx}" rx="2" fill="${s.delta>=0?'#63b380':'#e06a5e'}" opacity=".85"/>`;
+      bars+=`<text x="${x+bw/2}" y="${Ht+12}" text-anchor="middle" font-size="10" fill="#5d6b7e" font-family="var(--mono)">${i+1}</text>`;
+      bars+=`<text x="${x+bw/2}" y="${y1-3}" text-anchor="middle" font-size="10" fill="#8b98aa" font-family="var(--mono)">${fmt(s.to)}</text>`;
+    });
+    card.insertAdjacentHTML('beforeend',`<svg viewBox="0 0 ${Wd} ${Ht+18}" style="width:100%;margin:6px 0"><line x1="6" x2="${Wd-6}" y1="${y(0)}" y2="${y(0)}" stroke="#2c394a"/>${bars}</svg>`);
+    const rows=steps.map((s,i)=>`<tr><td class="tn">${i+1}</td><td>${s.label}<span class="troom"> · ${s.room}</span></td><td class="td ${s.delta<0?'neg':'pos'}">${s.delta>0?'+':''}${fmt(s.delta)}</td><td class="tb">${fmt(s.to)}</td></tr>`).join('');
+    card.insertAdjacentHTML('beforeend',`<table class="roll"><tr><th></th><th>Movement</th><th>Change</th><th>Balance</th></tr>${rows}</table>`);
+  }
+  const f=el('div','mfoot');const b=el('button','cta','Close');b.onclick=closeModal;f.append(b);card.append(f);
+  openModal(card,true);
+}
+function showAudit(){
+  const card=el('div','mcard');
+  card.append(el('div','qk','Audit file'));
+  card.append(el('h4','','Findings: '+S.mistakes.length+' · Case mastery '+S.score+'/100'));
+  const open=retakeList().length;
+  if(S.mistakes.length&&!open)card.insertAdjacentHTML('beforeend','<p class="fl">All findings cleared through the retake · their mastery earned back</p>');
+  if(!S.mistakes.length){
+    card.insertAdjacentHTML('beforeend','<p>No findings. Every answer so far was right the first time; the mastery meter shows what that has earned.</p>');
+  } else {
+    if(open)card.insertAdjacentHTML('beforeend','<p class="fy">The right calls stay sealed while findings are open, no peeking before the retake. Clear the retake (✎ quiz) and they appear here with full explanations.</p>');
+    S.mistakes.forEach((m,i)=>{
+      const rev=!!m.done;
+      card.insertAdjacentHTML('beforeend',
+        `<div class="finding"><div class="fhead">${i+1} · ${m.w}${m.k?' · '+m.k:''}${rev?' · cleared':''}</div><p class="fq">${m.q}</p><p class="fa">Your answer: ${m.a}</p>${rev&&m.c?`<p class="fl">Right call: ${m.c}</p>`:''}${rev&&m.y?`<p class="fy">${m.y}</p>`:''}</div>`);
+    });
+  }
+  const f=el('div','mfoot');const b=el('button','cta','Close');b.onclick=closeModal;f.append(b);card.append(f);
+  openModal(card,true);
+}
+/* ================= quiz library / retake ================= */
+const NUMQ=[
+ {kicker:'The numbers',q:'Day one: the premium of 1,000 goes into the pool. Entity share of the pool 35, non-varying claims and expenses 10, risk adjustment 5. The B104 variable fee, and with it the day-one CSM?',options:[
+   {t:'20.0',ok:true,why:'B104 nets the fulfilment cash flows that do not vary with the pool off the entity’s share, and the fulfilment cash flows include the risk adjustment: 35 − 10 − 5 = 20. With nothing else at inception, the CSM equals the variable fee, and nothing hits P&L on day one.'},
+   {t:'25.0',why:'That is 35 − 10 only. The fulfilment cash flows include the risk adjustment, so the 5 is netted inside the variable fee too: 20.'},
+   {t:'30.0',why:'That is 35 − 5 only. The non-varying claims and expenses of 10 come off as well: 35 − 10 − 5 = 20.'}],cite:['38','B104']},
+ {kicker:'The numbers',q:'Year one: the CSM starts at 20. The entity share of the pool gain adds 4.0 and the mortality study takes 1.0. Claims also came in 1.0 worse than expected. CSM before release?',options:[
+   {t:'23.0',ok:true,why:'20 plus 4 for the entity share, less 1 for the future-service mortality change, gives 23. The claims miss of 1.0 is current service and goes to P&L, never the CSM.'},
+   {t:'22.0',why:'You deducted the claims miss too. That 1.0 is current-service experience; it hits P&L directly and never touches the CSM.'},
+   {t:'24.0',why:'You skipped the mortality study. Future-service changes adjust the CSM, so the 1.0 comes off.'}],cite:['45(b)','45(c)','B112']},
+ {kicker:'The numbers',q:'Release: coverage units say half the total service was delivered in year one. The CSM stands at 23.0. How much releases to revenue?',options:[
+   {t:'11.5',ok:true,why:'23.0 times one half is 11.5. The CSM releases in line with coverage units, insurance plus investment service.'},
+   {t:'23.0',why:'That would earn everything now, with a full year of service still to come.'},
+   {t:'2.5',why:'2.5 is the risk-adjustment release under para 81. The CSM has its own release, by coverage units.'}],cite:['45(e)','B119A','81']},
+ {kicker:'The numbers',q:'Year one P&L: the CSM releases 11.5, the RA releases 2.5, and claims came in 1.0 worse than expected. What is the year-one result?',options:[
+   {t:'13.0',ok:true,why:'11.5 plus 2.5 less the 1.0 claims miss gives 13.0. That matches the P&L chip in the header after the release desk.'},
+   {t:'14.0',why:'You forgot the claims miss. Actual claims ran 1.0 over expected and that lands in the current year.'},
+   {t:'11.5',why:'That is the CSM release alone. The RA release adds 2.5 and the claims miss takes 1.0 back.'}],cite:['B119A','81','83–84']},
+ {kicker:'The numbers',q:'The storm: fulfilment economics turn against you by 18.5 while the CSM stands at 11.5. What loss component do you book?',options:[
+   {t:'7.0',ok:true,why:'The CSM absorbs the first 11.5 and stops at zero. The remaining 7.0 becomes the loss component, booked straight to P&L.'},
+   {t:'18.5',why:'The CSM absorbs what it can first. Only the excess over the 11.5 balance becomes a loss.'},
+   {t:'0.0',why:'The CSM covers only 11.5 of an 18.5 hit. The uncovered 7.0 is a loss now.'}],cite:['47–48','50']}];
+function retakeList(){
+  const byQ=new Map();
+  for(const m of S.mistakes){
+    if(!m.c||m.done)continue;
+    if(!byQ.has(m.q))byQ.set(m.q,{q:m.q,k:m.k,w:m.w,c:m.c,y:m.y,x:m.x||'',p:m.p||0,wrongs:new Set()});
+    if(m.a&&m.a!==m.c)byQ.get(m.q).wrongs.add(m.a);
+  }
+  return [...byQ.values()];
+}
+function retakeQuiz(r){
+  const options=[{t:r.c,ok:true,why:r.y||''}];
+  [...r.wrongs].slice(0,3).forEach(a=>options.push({t:a,why:'This is the answer the audit file flagged last time.'}));
+  return {kicker:r.k||r.w,q:r.q,intro:r.x||'',options};
+}
+function examQuiz(o,idx,total,drill){
+  return new Promise(res=>{
+    const card=el('div','mcard');
+    card.append(el('div','qk',(drill?'Numbers drill':'Retake')+' · '+idx+' of '+total+(o.kicker&&!drill?' · '+o.kicker:'')));
+    if(o.intro)card.insertAdjacentHTML('beforeend',o.intro);
+    card.append(el('div','q',o.q));
+    const opts=el('div','opts'); const keys='ABCD';
+    const shuffled=o.options.map((op,i)=>({op,r:(Math.sin(i*9301+o.q.length*49297)*233280)%1}))
+      .sort((a,b)=>a.r-b.r).map(x=>x.op);
+    shuffled.forEach((op,i)=>{
+      const b=el('button','opt');
+      b.append(el('span','key',keys[i]),el('span','',op.t));
+      b.onclick=()=>{
+        [...opts.children].forEach(x=>x.disabled=true);
+        if(op.ok){
+          b.classList.add('right');
+          card.append(el('div','verdict good','<strong>Correct.</strong> '+(op.why||'')
+            +(o.cite?'<div>'+o.cite.map(c=>`<span class="cite">${c}</span>`).join('')+'</div>':'')));
+          const f=el('div','mfoot');const c=el('button','cta big',idx<total?'Next question':'Finish');
+          c.onclick=()=>{closeModal();res(true);};f.append(c);card.append(f);
+          c.scrollIntoView({block:'nearest'});
+        }else{
+          b.classList.add('wrong');
+          if(drill){
+            const co=o.options.find(x=>x.ok)||{};
+            card.append(el('div','verdict bad','<strong>Not quite.</strong> '+(op.why||'')+' The right call: <strong>'+co.t+'</strong>. <em>Practice only, no penalty.</em>'));
+            const f=el('div','mfoot');const c=el('button','cta big',idx<total?'Next question':'Finish');
+            c.onclick=()=>{closeModal();res(true);};f.append(c);card.append(f);
+          } else {
+            card.append(el('div','verdict bad','<strong>Not this time.</strong> '+(op.why||'')+' <em>One miss ends the retake. The findings stay open; come back whenever you are ready.</em>'));
+            const f=el('div','mfoot');const c=el('button','cta big','Back to the game');
+            c.onclick=()=>{closeModal();res(false);};f.append(c);card.append(f);
+          }
+        }
+      };
+      opts.append(b);
+    });
+    card.append(opts);
+    openModal(card,false);
+    /* escapable: leaving ends the attempt, no penalty */
+    const holder=card.parentElement;
+    if(holder){
+      const x=document.createElement('button');x.className='mclose';x.innerHTML='×';
+      x.setAttribute('aria-label',drill?'Leave the drill':'Leave the retake');
+      x.title=drill?'Leave the drill':'Leave the retake (no penalty, come back any time)';
+      x.onclick=()=>{closeModal();res(false);};
+      holder.append(x);
+    }
+  });
+}
+function finishRetake(){
+  /* the cleared findings hand back the mastery they carried */
+  const back=retakeList().reduce((t,r)=>t+(r.p||QUESTION_PTS),0);
+  S.mistakes.forEach(m=>m.done=1);
+  S.score=Math.min(100,S.score+back);
+  S.retakePassed=1;S.drillDue=0;save();setAudit();
+  const card=el('div','mcard');
+  card.append(el('div','qk','Retake passed'));
+  card.append(el('div','grade','Findings cleared.'));
+  card.insertAdjacentHTML('beforeend','<p>Every missed question answered right'+(S.done.storm?' and the numbers walked through':'')+'. The mastery those findings carried is earned back: case mastery now stands at <strong>'+S.score+'/100</strong>. The findings stay in the audit file as history, marked cleared, with their explanations now open.</p>');
+  const f=el('div','mfoot');const b=el('button','cta big','Continue');b.onclick=()=>{closeModal();if(S.done.storm)endOverlay();};f.append(b);card.append(f);
+  openModal(card,true);
+}
+async function runRetake(R){
+  const qs=R.map(retakeQuiz);
+  for(let i=0;i<qs.length;i++){
+    const ok=await examQuiz(qs[i],i+1,qs.length);
+    if(!ok)return;
+  }
+  if(!S.done.storm){finishRetake();return;}
+  /* end-game: the numbers drill is the mandatory last step */
+  S.drillDue=1;save();
+  await new Promise(res=>{
+    const card=el('div','mcard');
+    card.append(el('div','qk','Findings cleared'));
+    card.append(el('h4','','One step left: the numbers'));
+    card.insertAdjacentHTML('beforeend','<p>Every missed question answered right. Before the mastery comes back, the auditor walks you through the numbers of the house: five quick questions, from the day-one CSM to the loss component. Wrong answers cost nothing here, you only have to finish.</p>');
+    const f=el('div','mfoot');const b=el('button','cta big','Start the numbers drill');b.onclick=()=>{closeModal();res();};f.append(b);card.append(f);
+    openModal(card,false);
+  });
+  await runDrill();
+}
+async function runDrillCore(){
+  for(let i=0;i<NUMQ.length;i++){const cont=await examQuiz(NUMQ[i],i+1,NUMQ.length,true);if(!cont)return false;}
+  return true;
+}
+async function runDrill(){
+  const done=await runDrillCore();
+  if(!done)return;
+  if(S.drillDue){finishRetake();return;}
+  const card=el('div','mcard');
+  card.append(el('div','qk','Numbers drill'));
+  card.append(el('h4','','Drill complete'));
+  card.insertAdjacentHTML('beforeend','<p>All five numbers walked through, from the day-one CSM of 20 to the loss component of 7. No effect on mastery; run it again any time.</p>');
+  const f=el('div','mfoot');const b=el('button','cta big','Close');b.onclick=closeModal;f.append(b);card.append(f);
+  openModal(card,true);
+}
+function showQuizLib(){
+  const card=el('div','mcard');
+  card.append(el('div','qk','Quiz library'));
+  if(S.drillDue){
+    card.append(el('h4','','One step left: the numbers drill'));
+    card.insertAdjacentHTML('beforeend','<p>Your retake is cleared. Finish the numbers drill, five quick questions with nothing at stake, and the mastery your findings carried comes back.</p>');
+    const f=el('div','mfoot');
+    const go=el('button','cta big','Finish the numbers drill');go.onclick=()=>{closeModal();runDrill();};f.append(go);
+    const b=el('button','cta','Close');b.onclick=closeModal;f.append(b);
+    card.append(f);openModal(card,true);return;
+  }
+  const R=retakeList();
+  let startable=false;
+  if(!R.length){
+    card.append(el('h4','','Nothing to retake'));
+    if(S.mistakes.length)card.insertAdjacentHTML('beforeend','<p class="fl">All findings cleared. Case mastery stands at '+S.score+'/100.</p>');
+    else card.insertAdjacentHTML('beforeend','<p>No missed questions on file. Miss one and it lands here for a retake.</p>');
+  } else {
+    startable=true;
+    card.append(el('h4','','Retake what you missed'));
+    card.insertAdjacentHTML('beforeend','<p>Only the questions you got wrong are in here, '+R.length+' of them. Answer '+(R.length>1?'them all':'it')+' right in one sitting and the mastery '+(R.length>1?'they carry':'it carries')+' is earned back. One miss ends the attempt, with nothing extra lost.</p>');
+    R.forEach((r,i)=>card.insertAdjacentHTML('beforeend',`<div class="finding"><div class="fhead">${i+1} · ${r.w}${r.k?' · '+r.k:''}</div><p class="fq">${r.q}</p></div>`));
+  }
+  if(S.done.storm&&!S.capstoneDone)card.insertAdjacentHTML('beforeend','<p style="margin-top:14px"><strong>The capstone file</strong> · two contracts no room taught, worth 12 mastery each. The engagement closes only after you have made these two calls.</p>');
+  if(S.done.storm)card.insertAdjacentHTML('beforeend','<p style="margin-top:14px"><strong>Numbers drill</strong> · five quick questions on the numbers of this house, from the day-one CSM to the loss component. Practice only: nothing at stake.</p>');
+  const f=el('div','mfoot');
+  if(S.done.storm){const dr=el('button','cta'+(startable?' ghost':''),'Numbers drill');dr.onclick=()=>{closeModal();runDrill();};f.append(dr);}
+  if(S.done.storm&&!S.capstoneDone){const cp=el('button','cta'+(startable?' ghost':' big'),'Open the capstone file');cp.onclick=()=>{closeModal();runCapstones();};f.append(cp);}
+  if(startable){const go=el('button','cta big','Start the retake');go.onclick=()=>{closeModal();runRetake(R);};f.append(go);}
+  const b=el('button','cta','Close');b.onclick=closeModal;f.append(b);
+  card.append(f);
+  openModal(card,true);
+}
+/* ================= capstone: two unseen cases ================= */
+/* Transfer, not recall: nothing in the rooms walked through these two contracts.
+   Each is a scored quiz worth CAPSTONE_PTS; a miss files a finding like any other. */
+const CAPSTONES=[
+ {pts:CAPSTONE_PTS,kicker:'Capstone case 1 · the guarantee',
+  ctx:'<div class="memo"><strong>Capstone file A · GuaranSave 95</strong><br>Premium 1,000 buys units in the <b>Harbour Bond Fund</b>, named in the contract · account credited <b>90%</b> of the fund’s returns · at maturity the policyholder receives the <b>higher of the account and a guaranteed 1,050</b> · in the entity’s inception-date stochastic projection the guarantee bites in about <b>half of the probability-weighted scenarios</b>, and where it bites the payment does not move with the fund at all</div>',
+  q:'GuaranSave 95: which measurement model?',options:[
+   {t:'GMM: on the B107 assessment, condition (c) fails',ok:true,why:'The pool is identified (a), and 90% looks on its face like a substantial share (b). But condition (c) asks whether a <strong>substantial proportion of the changes in the amounts paid vary with the fair value of the pool</strong>, assessed over the contract’s duration on a present-value, probability-weighted basis (B107–B108). Here the guarantee freezes the payment in about half the weighted scenarios, so the expected variability is not substantial: the contract fails (c) and is measured under the general model, with the guarantee inside the fulfilment cash flows. Same brochure feel as UnitLife, opposite classification: that is why the test is an assessment, not a label.'},
+   {t:'VFA: an identified pool plus a 90% share is comfortably direct participation',why:'That is label-reading, not assessment. The 90% crediting only matters in the scenarios where the account is what actually gets paid. With the guarantee expected to bite in half the probability-weighted scenarios, payments stop varying with the pool in exactly the scenarios that carry half the weight (B107).'},
+   {t:'VFA in the scenarios where the guarantee stays out of the money, GMM in the rest',why:'Classification is one whole-contract call, made once at inception on probability-weighted expectations (B102, B107). A contract does not switch models scenario by scenario, or year by year.'}],
+  cite:['B101(c)','B107–B108','B102']},
+ {pts:CAPSTONE_PTS,kicker:'Capstone case 2 · the hedge',
+  ctx:'<div class="memo"><strong>Capstone file B · the CFO’s swaps</strong><br>Mutual &amp; Torres’ VFA book carries promises that do not vary with the pool, and falling rates raise their PV at the fee’s expense · the CFO buys <b>interest-rate swaps</b> against that risk · the <b>risk-management objective and strategy were documented before hedging began</b>, meeting B116 · this year rates fall: the swaps gain <b>+3.0</b> and the financial-risk change on the non-varying fulfilment cash flows is <b>−3.0</b></div>',
+  q:'Under the VFA, where may the −3.0 financial-risk change go?',options:[
+   {t:'P&L (or IFIE), by the documented risk-mitigation choice, meeting the swap gains there',ok:true,why:'B113(b) would send the −3.0 into the CSM, but B115 provides the exception: with the B116 documentation in place, the entity <strong>may choose not to adjust the CSM</strong> for the financial-risk changes the swaps mitigate, recognizing them in profit or loss (or insurance finance income/expense) instead. There the −3.0 meets the +3.0 on the swaps and the books show the hedge doing its job, rather than a one-sided gain in P&L against a quiet CSM. The choice applies prospectively, and stops if the conditions lapse (B117–B118).'},
+   {t:'CSM: B113(b) is absolute under the VFA',why:'B113(b) is the rule and B115–B118 the documented exception. With the B116 conditions met, forcing the −3.0 into the CSM while the swap gain of +3.0 sits in P&L would show accounting noise where the economics show a working hedge.'},
+   {t:'OCI: hedges always park their offsets there',why:'This is not IFRS 9 hedge accounting. The B115 choice recognizes the mitigated financial-risk changes in P&L or IFIE; OCI only enters through the general finance-income disaggregation policy, not as a hedging parking lot.'}],
+  cite:['B115','B116','B117–B118']},
+];
+async function runCapstones(){
+  await new Promise(res=>{
+    const card=el('div','mcard');
+    card.append(el('div','qk','The capstone file'));
+    card.append(el('h4','','Two contracts no room taught'));
+    card.insertAdjacentHTML('beforeend','<p>The rooms tested what they showed you. These two cases test whether the rules travel: a contract with a heavy guarantee, and a hedge against the fee’s financial risk. A right first call earns <strong>12 mastery</strong> each; a miss files a finding like any other, retakable later. Take your time with the memos.</p>');
+    const f=el('div','mfoot');const b=el('button','cta big','Open case 1');b.onclick=()=>{closeModal();res();};f.append(b);card.append(f);
+    openModal(card,false);
+  });
+  setWhere('Mutual & Torres · The capstone file');
+  for(const c of CAPSTONES){c.intro=c.ctx;await quiz(c,true);}
+  S.capstoneDone=1;save();
+  setWhere('Learning Variable Fee Assurance in Mutual & Torres Assurance House');
+  endOverlay();
+}
+function quiz(o, scoring){
+  /* resolves when correct + continue; a right answer on the FIRST try earns points
+     (host hook `award(o.pts)`), a miss files a mistake and forfeits them */
+  return new Promise(res=>{
+    let missed=false;
+    const card=el('div','mcard');
+    card.append(el('div','qk',o.kicker||'Your call'));
+    if(o.intro)card.insertAdjacentHTML('beforeend',o.intro);
+    card.append(el('div','q',o.q));
+    const opts=el('div','opts'); const keys='ABCD';
+    const shuffled=o.options.map((op,i)=>({op,r:(Math.sin(i*9301+o.q.length*49297)*233280)%1}))
+      .sort((a,b)=>a.r-b.r).map(x=>x.op);
+    shuffled.forEach((op,i)=>{
+      const b=el('button','opt');
+      b.append(el('span','key',keys[i]),el('span','',op.t));
+      b.onclick=()=>{
+        if(op.ok){
+          [...opts.children].forEach(x=>x.disabled=true);
+          b.classList.add('right');
+          if(scoring&&!missed&&typeof award==='function')award(o.pts);
+          const v=el('div','verdict good','<strong>Correct.</strong> '+op.why
+            +(o.cite?'<div>'+o.cite.map(c=>`<span class="cite">${c}</span>`).join('')+'</div>':''));
+          card.append(v);
+          const f=el('div','mfoot');const c=el('button','cta big',o.continueLabel||'Continue');
+          c.onclick=()=>{closeModal();res();};f.append(c);card.append(f);
+          c.scrollIntoView({block:'nearest'});
+        }else{
+          b.classList.add('wrong');b.disabled=true;
+          if(scoring){const co=o.options.find(x=>x.ok)||{};S.mistakes.push({w:document.getElementById('whereLabel').textContent.replace('Mutual & Torres · ',''),k:o.kicker||'',q:o.q,a:op.t,c:co.t||'',y:co.why||'',x:o.ctx||o.intro||'',p:o.pts||0});S.retakePassed=0;S.drillDue=0;}
+          missed=true;
+          penalty(scoring);
+          card.append(el('div','verdict bad','<strong>The auditor flags it.</strong> '+op.why+(scoring?' <em>(No mastery earned on this one; the finding goes on file, and its points come back through the retake. Try again.)</em>':' <em>(Review replay, nothing at stake.)</em>')));
+        }
+      };
+      opts.append(b);
+    });
+    card.append(opts);
+    openModal(card,false);
+  });
+}
+
+/* ================= dialogue ================= */
+function talk(sceneEl,lines){
+  const WHO={ph:'ana',act:'actuary',aud:'auditor',uw:'staff'};
+  const speak=w=>{sceneEl.querySelectorAll('.fig').forEach(f=>{
+    f.dataset.state=(WHO[w]&&f.dataset.who===WHO[w])?'talk':'idle';});};
+  return new Promise(res=>{
+    let i=0;
+    const bar=el('div','dlg');
+    sceneEl.append(bar);
+    const show=()=>{
+      const ln=lines[i];
+      speak(ln.w);
+      bar.innerHTML='';
+      bar.append(el('div','pv '+ln.w, {ph:'AT',act:'ACT',aud:'AUD',uw:'UW',sys:'·'}[ln.w]||'·'));
+      const t=el('div','txt');
+      if(ln.n)t.append(el('div','who',ln.n));
+      t.append(el('p','',ln.t));bar.append(t);
+      const n=el('button','next',i<lines.length-1?'Next':'Done');
+      n.onclick=()=>{i++;if(i<lines.length)show();else{bar.remove();sceneEl.querySelectorAll('.fig').forEach(f=>f.dataset.state='idle');res();}};
+      bar.append(n);
+    };
+    show();
+  });
+}
+
+/* ================= svg helpers ================= */
+function person(x,y,s,color,dark,kind){
+  kind=kind||({'#72b7cc':'ana','#d9a648':'avatar','#e06a5e':'auditor','#8b98aa':'staff'})[color]||'staff';
+  const skin='#e8c9a8';
+  const hair={ana:'#2e2620',avatar:'#4a3826',actuary:'#9aa4b0',staff:'#3a3f4a',staff2:'#7a4a32',auditor:'#2a2a33'}[kind];
+  const hairPath={
+    ana:`<path d="M-13.6,7 L-13.6,-4 Q-13.6,-17.8 0,-17.8 Q13.6,-17.8 13.6,-4 L13.6,7 Q10.5,4.5 9.6,-2 Q9.6,-8 4,-10.2 Q-3,-12.2 -8.5,-8.6 Q-9.6,-6.5 -9.6,-2 Q-10.5,4.5 -13.6,7 Z" fill="${hair}"/>`,
+    avatar:`<path d="M-13.2,-2 Q-13.5,-17.7 0,-17.7 Q13.5,-17.7 13.2,-2 Q10.6,-9 5.8,-10.6 Q4.6,-7.6 1.6,-10.9 Q-4.5,-13 -9.2,-9 Q-12.2,-6.4 -13.2,-2 Z" fill="${hair}"/>`,
+    actuary:`<path d="M-13.3,2.5 Q-13.7,-7.5 -8.2,-12.3 Q-6.8,-10.4 -10.6,-6.6 Q-11.7,-3.4 -11.5,2.5 Z" fill="${hair}"/><path d="M13.3,2.5 Q13.7,-7.5 8.2,-12.3 Q6.8,-10.4 10.6,-6.6 Q11.7,-3.4 11.5,2.5 Z" fill="${hair}"/><path d="M-2.5,-16.9 Q0,-18.6 2.5,-16.9 Q0,-15.9 -2.5,-16.9 Z" fill="${hair}"/>`,
+    staff:`<path d="M-13.2,-2.5 Q-13.5,-17.7 0,-17.7 Q13.5,-17.7 13.2,-2.5 Q9,-10.8 0,-11.2 Q-9,-10.8 -13.2,-2.5 Z" fill="${hair}"/>`,
+    staff2:`<path d="M-13.4,-1.5 Q-13.7,-17.7 0,-17.7 Q13.7,-17.7 13.4,-1.5 Q11.5,-9.5 3.5,-10.8 Q-5,-12 -10,-8 Q-12.6,-5.6 -13.4,-1.5 Z" fill="${hair}"/><path d="M10.2,-11.5 Q16.8,-7.5 15.6,2.5 Q14.6,12.5 11.2,18.5 Q9.3,17.4 9.9,10.5 Q10.6,2.5 8.6,-4 Q8,-8.5 10.2,-11.5 Z" fill="${hair}"/>`,
+    auditor:`<path d="M-13.2,-2.5 Q-13.5,-17.7 0,-17.7 Q13.5,-17.7 13.2,-2.5 Q9.5,-10.2 1,-10.9 Q-7.5,-11.3 -13.2,-2.5 Z" fill="${hair}"/><circle cx="0" cy="-19.2" r="4.8" fill="${hair}"/>`,
+  }[kind];
+  const glasses=kind==='actuary'
+    ?`<g stroke="#1f2833" stroke-width="1.3" fill="none"><circle cx="-4.5" cy="-6" r="3.6"/><circle cx="4.5" cy="-6" r="3.6"/><line x1="-0.9" y1="-6" x2="0.9" y2="-6"/></g>`
+    :kind==='auditor'
+    ?`<g stroke="#1f2833" stroke-width="1.3" fill="none"><rect x="-8" y="-8.8" width="7" height="5.6" rx="1.4"/><rect x="1" y="-8.8" width="7" height="5.6" rx="1.4"/><line x1="-1" y1="-6.4" x2="1" y2="-6.4"/></g>`:'';
+  const prop=kind==='auditor'
+    ?`<g transform="rotate(-6 -19 37)"><rect x="-24.5" y="30" width="11" height="15" rx="1.5" fill="#d9d2c0"/><line x1="-22" y1="35" x2="-16" y2="35" stroke="#8b8474" stroke-width="1"/><line x1="-22" y1="38.5" x2="-16" y2="38.5" stroke="#8b8474" stroke-width="1"/></g>`:'';
+  return `<g class="fig" data-who="${kind}" data-state="idle" transform="translate(${x},${y}) scale(${s})">
+    <ellipse cx="0" cy="86" rx="24" ry="5" fill="#000" opacity=".25"/>
+    <g class="body">
+      <g class="leg leg-l"><path d="M-13,42 C-15,62 -14,76 -12,84 L-4,84 C-6,66 -7,52 -5,44 Z" fill="${dark}"/></g>
+      <g class="leg leg-r"><path d="M13,42 C15,62 14,76 12,84 L4,84 C6,66 7,52 5,44 Z" fill="${dark}"/></g>
+      <path d="M-17,14 Q0,4 17,14 L15,44 Q0,52 -15,44 Z" fill="${color}"/>
+      <g class="arm arm-l"><path d="M-15.5,18 C-19,26 -20,34 -19,41 L-14.5,40 C-15,33 -14,26 -12.5,20 Z" fill="${dark}"/><circle cx="-17" cy="42.5" r="2.6" fill="${skin}"/>${prop}</g>
+      <g class="arm arm-r"><path d="M15.5,18 C19,26 20,34 19,41 L14.5,40 C15,33 14,26 12.5,20 Z" fill="${dark}"/><circle cx="17" cy="42.5" r="2.6" fill="${skin}"/></g>
+      <g class="head">
+        <circle cx="0" cy="-4" r="13" fill="${skin}"/>
+        ${hairPath}
+        <g class="eyes"><circle cx="-4.5" cy="-5.5" r="1.5" fill="#2b2b33"/><circle cx="4.5" cy="-5.5" r="1.5" fill="#2b2b33"/></g>
+        ${glasses}
+      </g>
+    </g>
+  </g>`;
+}
+function hotspot(x,y,label,id,cls,cap){
+  return `<g class="hs ${cls||''}" data-hs="${id}" transform="translate(${x},${y})" tabindex="0" role="button">
+    <circle class="halo" r="24"/>
+    <circle class="pulse" r="14" style="transform-origin:0 0"/>
+    <circle class="ring" r="13"/>
+    <text class="glyph">${label}</text>
+    <text class="tick">✓</text>
+    ${cap?`<text class="cap" y="28">${cap}</text>`:''}
+  </g>`;
+}
+function wallWindow(x,y,w,h,sky){
+  const m=Math.min(w,h);
+  return `<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${sky}"/>
+  <circle cx="${x+w*0.3}" cy="${y+h*0.24}" r="${m*0.09}" fill="#f2e9c8" opacity=".9"/>
+  <circle cx="${x+w*0.3+m*0.05}" cy="${y+h*0.24-m*0.03}" r="${m*0.075}" fill="${sky}"/>
+  <circle cx="${x+w*0.68}" cy="${y+h*0.14}" r="1.3" fill="#c7d3e2" opacity=".8"/>
+  <circle cx="${x+w*0.82}" cy="${y+h*0.38}" r="1" fill="#c7d3e2" opacity=".6"/>
+  <circle cx="${x+w*0.15}" cy="${y+h*0.6}" r="1" fill="#c7d3e2" opacity=".6"/>
+  <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="none" stroke="#0b0f15" stroke-width="5"/>
+  <line x1="${x+w/2}" y1="${y}" x2="${x+w/2}" y2="${y+h}" stroke="#0b0f15" stroke-width="4"/>
+  <line x1="${x}" y1="${y+h/2}" x2="${x+w}" y2="${y+h/2}" stroke="#0b0f15" stroke-width="4"/>
+  <rect x="${x-6}" y="${y+h}" width="${w+12}" height="8" rx="3" fill="#2c394a"/></g>`;
+}
+
+/* ================= stage / router ================= */
+const stage=document.getElementById('stage');
+function clearStage(){stage.innerHTML='';}
+function sceneShell(roomId,objectiveHTML){
+  clearStage();
+  const wrap=el('div','fadein');
+  const sc=el('div','scene');
+  sc.id='scene';
+  wrap.append(sc);
+  stage.append(wrap);
+  const top=el('div','scene-top');
+  const back=el('button','backbtn','← House map');
+  back.onclick=()=>{closeModal();renderMap();};
+  top.append(back);
+  const obj=el('div','objective',objectiveHTML||'');
+  obj.id='objective';
+  top.append(obj);
+  return {sc,top,obj,mount(svg){sc.innerHTML='<div class="scenewrap">'+svg+'</div>';sc.append(top);}};
+}
+function setObjective(html){const o=document.getElementById('objective');if(o)o.innerHTML=html;}
+let HS_BUSY=false;
+function refreshNext(){
+  const sc=document.getElementById('scene'); if(!sc)return;
+  sc.querySelectorAll('.hs.next').forEach(h=>h.classList.remove('next'));
+  const nxt=[...sc.querySelectorAll('.hs')].find(h=>!h.classList.contains('done')&&!h.classList.contains('hidden'));
+  if(nxt){
+    nxt.classList.add('next');
+    /* when the scene is a swipeable viewport (small portrait screens), bring the next step into view */
+    const sw=sc.querySelector('.scenewrap');
+    if(sw&&sw.scrollWidth>sw.clientWidth+8){
+      try{
+        const r=nxt.getBoundingClientRect(), w=sw.getBoundingClientRect();
+        sw.scrollTo({left:sw.scrollLeft+(r.left+r.width/2)-(w.left+w.width/2),behavior:'smooth'});
+      }catch(e){}
+    }
+  }
+}
+function bindHotspots(sc,handlers){
+  sc.querySelectorAll('.hs').forEach(g=>{
+    const id=g.dataset.hs;
+    const fire=()=>{
+      if(!handlers[id]||HS_BUSY)return;
+      HS_BUSY=true;
+      const r=Promise.resolve(handlers[id](g));
+      if(g.classList.contains('q'))r.then(()=>g.classList.add('done'));
+      r.finally(()=>{HS_BUSY=false;refreshNext();});
+    };
+    g.addEventListener('click',fire);
+    g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fire();}});
+  });
+  setTimeout(refreshNext,0);
+}
+
+/* ================= title ================= */
+function titleScreen(){
+  setWhere('Learning Variable Fee Assurance in Mutual & Torres Assurance House');clearStage();renderChips();
+  const h=el('div','hero fadein');
+  h.append(el('div','kicker','An IFRS 17 adventure'));
+  h.append(el('h1','','Walk into the house.<br>Play the <em>variable fee</em>.'));
+  h.append(el('p','','Six rooms, one contract, one policyholder who reads her statements. Explore the house, open what glows, answer what the rooms ask, the ledger in the header only moves when you book the economics correctly.'));
+  const btns=el('div','btns');
+  const done=Object.keys(S.done).length;
+  const finished=!!(S.done.storm&&S.capstoneDone);
+  /* a finished run greets you with a clean slate: books closed, nothing in the header */
+  if(finished){document.getElementById('ledgerchips').innerHTML='';}
+  const b=el('button','cta big', finished?'Walk in again':(done?'Continue: '+ROOM_NAMES[ROOM_ORDER[Math.min(done,5)]]:'Enter the house →'));
+  b.onclick=()=>{ if(finished){S={done:{},score:0,started:true,progress:{},mistakes:[]};ledgerFromState();renderChips();setAudit();}
+    S.started=true;save();renderMap(); };
+  btns.append(b);
+  if(finished){
+    const r=el('button','cta ghost','Revisit the finished house');
+    r.onclick=()=>{S.started=true;save();renderChips();renderMap();};
+    btns.append(r);
+  } else if(done){const r=el('button','cta ghost','Start over');
+    r.onclick=()=>{S={done:{},score:0,started:true,progress:{},mistakes:[]};ledgerFromState();renderChips();setAudit();save();renderMap();};btns.append(r);}
+  h.append(btns);
+  if(finished)h.append(el('p','fy','Your last engagement closed at case mastery '+S.score+'/100'+(S.score>=100?', the case mastered':'')+'. Walking in again opens a fresh set of books; revisiting keeps the old ones open.'));
+  stage.append(h);
+}
+
+/* ================= the house map ================= */
+const MAP_POS={ /* door x, baseline y per room */
+  lobby:{x:390,y:688,floor:0,side:'L'}, underwriting:{x:610,y:688,floor:0,side:'R'},
+  studio:{x:390,y:468,floor:1,side:'L'}, market:{x:610,y:468,floor:1,side:'R'},
+  release:{x:390,y:248,floor:2,side:'L'}, storm:{x:610,y:248,floor:2,side:'R'},
+};
+let avatarAt = S.done.storm?'storm':ROOM_ORDER[Math.max(0,Math.min(Object.keys(S.done).length,5))];
+if(!MAP_POS[avatarAt])avatarAt='lobby';
+
+function roomBox(id,x,y,label,icon,state){
+  /* state: locked | open | done | next */
+  const w=330,h=170;
+  const dim = state==='locked';
+  const aria=label+(state==='locked'?', locked':state==='done'?', complete':state==='next'?', your next room':'');
+  return `<g class="room-g ${dim?'locked':''}" data-room="${id}" tabindex="0" role="button" aria-label="${aria}"${dim?' aria-disabled="true"':''}>
+    <rect class="glowrect" x="${x-4}" y="${y-4}" width="${w+8}" height="${h+8}" rx="12" fill="none" stroke="var(--gold)" stroke-width="2" opacity="0"/>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${dim?'#121924':'#1a2432'}" stroke="#2c394a"/>
+    ${icon(x,y,w,h,dim)}
+    <text x="${x+14}" y="${y+24}" font-family="var(--mono)" font-size="12" letter-spacing="2" fill="${dim?'#4a586b':'#d9a648'}">${label.toUpperCase()}</text>
+    ${state==='done'?`<g transform="translate(${x+w-24},${y+22})"><circle r="10" fill="#1b2b22" stroke="#63b38088"/><path d="M-4,0 L-1,3 L5,-4" stroke="#63b380" stroke-width="2" fill="none"/></g>`:''}
+    ${state==='locked'?`<g transform="translate(${x+w-24},${y+22})" opacity=".8"><rect x="-6" y="-3" width="12" height="10" rx="2" fill="#4a586b"/><path d="M-4,-3 v-3 a4,4 0 0 1 8,0 v3" stroke="#4a586b" stroke-width="2" fill="none"/></g>`:''}
+    ${state==='next'?`<circle class="doorglow" cx="${x+w-24}" cy="${y+22}" r="7" fill="var(--gold)"/>`:''}
+  </g>`;
+}
+/* tiny furniture icons per room */
+const ICONS={
+  lobby:(x,y,w,h,d)=>`<g opacity="${d?.35:1}">
+    ${person(x+95,y+72,0.5,'#8b98aa','#3c4759','staff2')}
+    <rect x="${x+50}" y="${y+95}" width="130" height="42" rx="5" fill="#243347"/>
+    <rect x="${x+46}" y="${y+86}" width="138" height="10" rx="4" fill="#31445e"/>
+    <path d="M${x+155},${y+86} a5,5 0 0 1 10,0 Z" fill="#d9a648"/><circle cx="${x+160}" cy="${y+79.5}" r="1.4" fill="#d9a648"/>
+    <text x="${x+115}" y="${y+122}" text-anchor="middle" font-family="var(--mono)" font-size="10" letter-spacing="2" fill="#5d6b7e">RECEPTION</text>
+    ${person(x+230,y+112,0.55,'#72b7cc','#274b59')}
+    <ellipse cx="${x+285}" cy="${y+138}" rx="16" ry="5" fill="#1e2a3a"/><path d="M${x+285},${y+138} q-6,-26 4,-38 M${x+285},${y+138} q8,-20 -2,-34 M${x+285},${y+138} q0,-30 10,-30" stroke="#3f6b52" stroke-width="3" fill="none"/></g>`,
+  underwriting:(x,y,w,h,d)=>`<g opacity="${d?.35:1}">
+    <rect x="${x+50}" y="${y+100}" width="150" height="12" rx="3" fill="#31445e"/><rect x="${x+60}" y="${y+112}" width="10" height="28" fill="#243347"/><rect x="${x+180}" y="${y+112}" width="10" height="28" fill="#243347"/>
+    <rect x="${x+70}" y="${y+78}" width="34" height="22" rx="2" fill="#c9a25a"/><rect x="${x+110}" y="${y+74}" width="34" height="26" rx="2" fill="#b8934f"/><rect x="${x+150}" y="${y+80}" width="34" height="20" rx="2" fill="#d3ab61"/>
+    <rect x="${x+230}" y="${y+60}" width="60" height="46" rx="3" fill="#223047" stroke="#2c394a"/><line x1="${x+238}" y1="${y+74}" x2="${x+282}" y2="${y+74}" stroke="#4a586b"/><line x1="${x+238}" y1="${y+86}" x2="${x+274}" y2="${y+86}" stroke="#4a586b"/></g>`,
+  studio:(x,y,w,h,d)=>`<g opacity="${d?.35:1}">
+    <rect x="${x+50}" y="${y+55}" width="140" height="80" rx="4" fill="#15241d" stroke="#2c394a"/>
+    <path d="M${x+65},${y+120} l0,-40 M${x+90},${y+120} l0,-25 M${x+115},${y+120} l0,-32 M${x+140},${y+120} l0,-50" stroke="#63b380" stroke-width="9" opacity=".8"/>
+    <text x="${x+235}" y="${y+110}" font-size="52" fill="#d9a648" font-family="var(--serif)">$</text></g>`,
+  market:(x,y,w,h,d)=>`<g opacity="${d?.35:1}">
+    <rect x="${x+45}" y="${y+50}" width="240" height="70" rx="5" fill="#131c29" stroke="#2c394a"/>
+    <polyline points="${x+60},${y+105} ${x+110},${y+92} ${x+150},${y+100} ${x+200},${y+68} ${x+265},${y+60}" stroke="#d9a648" stroke-width="2.5" fill="none"/>
+    <circle cx="${x+265}" cy="${y+60}" r="4" fill="#d9a648"/></g>`,
+  release:(x,y,w,h,d)=>`<g opacity="${d?.35:1}">
+    <rect x="${x+70}" y="${y+55}" width="46" height="80" rx="6" fill="#20304a" stroke="#2c394a"/><rect x="${x+74}" y="${y+85}" width="38" height="46" rx="4" fill="#d9a648" opacity=".85"/>
+    <path d="M${x+116},${y+120} h40" stroke="#4a586b" stroke-width="5"/>
+    <rect x="${x+156}" y="${y+100}" width="34" height="38" rx="4" fill="#182436" stroke="#2c394a"/><rect x="${x+159}" y="${y+120}" width="28" height="15" fill="#63b380" opacity=".8"/></g>`,
+  storm:(x,y,w,h,d)=>`<g opacity="${d?.35:1}">
+    <path d="M${x+90},${y+80} q-24,0 -24,-18 q0,-16 16,-18 q4,-16 22,-16 q16,0 21,13 q18,-2 20,14 q2,20 -20,20 Z" fill="#3a4a61"/>
+    <path d="M${x+112},${y+86} l-12,22 h10 l-8,22" stroke="#e0b74e" stroke-width="3.5" fill="none"/>
+    <polyline points="${x+180},${y+64} ${x+215},${y+72} ${x+240},${y+96} ${x+275},${y+128}" stroke="#e06a5e" stroke-width="2.5" fill="none"/></g>`,
+};
+
+function renderMap(){
+  setWhere('Learning Variable Fee Assurance in Mutual & Torres Assurance House');clearStage();renderChips();
+  const unlocked=unlockedCount();
+  const nextId=ROOM_ORDER[unlocked-1];
+  const showThought=!S.done.storm&&nextId&&!S.done[nextId];
+  const tname=((ROOM_ORDER.indexOf(nextId)+1)+' · '+ROOM_NAMES[nextId]).toUpperCase();
+  const tw=Math.round(tname.length*7.3+26);
+  const thought=showThought?`<g class="thought"><circle cx="7" cy="-15" r="2.5" fill="#e9eef5"/><circle cx="12" cy="-23" r="3.5" fill="#e9eef5"/><rect x="${18-tw/2}" y="-52" width="${tw}" height="24" rx="12" fill="#e9eef5"/><text x="18" y="-36" text-anchor="middle" font-family="var(--mono)" font-size="11.5" letter-spacing="1" fill="#131a24">${tname}</text></g>`:'';
+  const wrap=el('div','fadein');
+  const sc=el('div','scene');
+  const rooms=ROOM_ORDER.map((id,i)=>{
+    const p=MAP_POS[id];
+    const x=p.side==='L'?55:615, y=[540,320,100][p.floor];
+    const state=S.done[id]?'done':(i<unlocked?(i===unlocked-1?'next':'open'):'locked');
+    return roomBox(id,x,y,ROOM_NAMES[id],ICONS[id],state);
+  }).join('');
+  sc.innerHTML=`<div class="scenewrap"><svg viewBox="0 0 1000 760" role="img" aria-label="Map of the Assurance House">
+    <rect width="1000" height="760" fill="#0a0f16"/>
+    <circle cx="850" cy="80" r="26" fill="#f2e9c8" opacity=".9"/><circle cx="838" cy="74" r="26" fill="#0a0f16"/>
+    <g opacity=".5"><circle cx="120" cy="120" r="1.4" fill="#c7d3e2"/><circle cx="210" cy="60" r="1" fill="#c7d3e2"/><circle cx="920" cy="200" r="1.2" fill="#c7d3e2"/><circle cx="60" cy="300" r="1" fill="#c7d3e2"/><circle cx="960" cy="420" r="1.1" fill="#c7d3e2"/></g>
+    <path d="M30,60 L500,8 L970,60 L970,64 L30,64 Z" fill="#1c2634"/>
+    <rect x="40" y="64" width="920" height="656" fill="#111926" stroke="#2c394a"/>
+    <rect x="40" y="530" width="920" height="4" fill="#2c394a"/>
+    <rect x="40" y="310" width="920" height="4" fill="#2c394a"/>
+    <rect x="455" y="64" width="90" height="656" fill="#0d1420"/>
+    <line x1="470" y1="64" x2="470" y2="720" stroke="#22304288" stroke-dasharray="4 7"/>
+    <line x1="530" y1="64" x2="530" y2="720" stroke="#22304288" stroke-dasharray="4 7"/>
+    <line x1="497" y1="64" x2="497" y2="720" stroke="#3b4a5f" stroke-width="1.2"/>
+    <line x1="503" y1="64" x2="503" y2="720" stroke="#3b4a5f" stroke-width="1.2"/>
+    <g id="car" transform="translate(0,${[596,376,156][MAP_POS[avatarAt].floor]})">
+      <rect x="462" y="0" width="76" height="76" rx="6" fill="#1b2736" stroke="#d9a64866"/>
+      <rect x="469" y="7" width="29" height="62" rx="2" fill="#243347" stroke="#31445e"/>
+      <rect x="502" y="7" width="29" height="62" rx="2" fill="#243347" stroke="#31445e"/>
+      <rect x="475" y="15" width="17" height="13" rx="1.5" fill="#31445e"/>
+      <rect x="508" y="15" width="17" height="13" rx="1.5" fill="#31445e"/>
+      <circle cx="500" cy="-7" r="3" fill="#d9a648"/>
+    </g>
+    <text x="500" y="88" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="3" fill="#5d6b7e">LIFT</text>
+    ${rooms}
+    <rect x="40" y="720" width="920" height="24" fill="#0d1420"/>
+    <text x="500" y="737" text-anchor="middle" font-family="var(--serif)" font-size="13" letter-spacing="4" fill="#8b98aa">MUTUAL &amp; TORRES · ASSURANCE HOUSE</text>
+    <g id="avatar" style="transform:translate(${MAP_POS[avatarAt].x}px,${MAP_POS[avatarAt].y-84}px)">${'' /* anchor at head-top; person drawn at local 0,0 */}
+      ${person(0,0,0.85,'#d9a648','#6b5222')}${thought}
+    </g>
+  </svg></div>`;
+  wrap.append(sc);
+  const hint=el('p','', '');
+  hint.style.cssText='color:var(--faint);font-size:12.5px;margin-top:10px;text-align:center';
+  hint.textContent = S.done.storm ? (S.capstoneDone?'Every room is open. Revisit any of them, replays cost nothing.':'Every room is open, and the capstone file is waiting: open it from ✎ quiz in the top bar to close the engagement.') :
+    'Click a lit room to walk there, the thought bubble says where to go next. Paragraph directory: ⓘ in the top bar.';
+  wrap.append(hint);
+  stage.append(wrap);
+
+  sc.querySelectorAll('.room-g').forEach(g=>{
+    const go=async()=>{
+      const id=g.dataset.room, idx=ROOM_ORDER.indexOf(id);
+      if(idx>=unlockedCount()){ // locked
+        g.animate([{transform:'translateX(0)'},{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'translateX(0)'}],{duration:250});
+        return;
+      }
+      if(WALKING)return;
+      WALKING=true;
+      try{ await walkTo(id,sc); } finally { WALKING=false; }
+      enterRoom(id);
+    };
+    g.addEventListener('click',go);
+    g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}});
+  });
+}
+
+let WALKING=false;
+async function walkTo(id,sc){
+  const av=sc.querySelector('#avatar'), car=sc.querySelector('#car');
+  const from=MAP_POS[avatarAt], to=MAP_POS[id];
+  avatarAt=id;
+  const fg=av?av.querySelector('.fig'):null;
+  if(fg)fg.dataset.state='walk';
+  if(RM||!av||document.hidden){if(fg)fg.dataset.state='idle';return;}
+  const speed=0.32; // px per ms
+  const y1=from.y-84, y2=to.y-84;
+  const seq=[];
+  if(from.floor!==to.floor){
+    seq.push({x:500,y:y1});          // walk to lift
+    seq.push({x:500,y:y2});          // ride
+    seq.push({x:to.x,y:y2});         // walk to door
+  } else seq.push({x:to.x,y:y1});
+  let cur={x:from.x,y:y1};
+  for(const p of seq){
+    const dist=Math.hypot(p.x-cur.x,p.y-cur.y);
+    const dur=Math.max(180,dist/speed);
+    const anim=av.animate([{transform:`translate(${cur.x}px,${cur.y}px)`},{transform:`translate(${p.x}px,${p.y}px)`}],{duration:dur,easing:'linear',fill:'forwards'});
+    if(car&&p.x===500&&cur.x===500){ car.animate([{transform:`translate(0px,${cur.y-8}px)`},{transform:`translate(0px,${p.y-8}px)`}],{duration:dur,easing:'linear',fill:'forwards'});
+      setTimeout(()=>car.setAttribute('transform',`translate(0,${p.y-8})`),dur);
+    }
+    await Promise.race([anim.finished.catch(()=>{}), new Promise(r=>setTimeout(r,dur+400))]);
+    cur=p;
+  }
+  if(fg)fg.dataset.state='idle';
+  await new Promise(r=>setTimeout(r,120));
+}
+
+function enterRoom(id){
+  setWhere('Mutual & Torres · '+ROOM_NAMES[id]);
+  ({lobby:roomLobby,underwriting:roomUnderwriting,studio:roomStudio,market:roomMarket,release:roomRelease,storm:roomStorm})[id]();
+}
+function completeRoom(id){
+  if(S.progress&&S.progress[id])delete S.progress[id];
+  if(!S.done[id]){S.done[id]=true;save();}
+}
+function doorOut(sc,label){
+  const prev=sc.querySelector(':scope > .cta.big'); if(prev)prev.remove();
+  const b=el('button','cta big',label||'Back to the map →');
+  b.style.cssText='position:absolute;left:50%;transform:translateX(-50%);bottom:16px;z-index:5';
+  b.onclick=()=>renderMap();
+  sc.append(b);
+}
+
+/* ================= ROOM: LOBBY ================= */
+async function roomLobby(){
+  const fresh=!S.done.lobby;
+  const {sc,mount}=sceneShell('lobby', fresh?'Objective: <b>TALK at the desk · READ the poster & the guides</b>':'Room complete · replay freely');
+  mount(`<svg viewBox="0 0 1200 640">
+    <rect width="1200" height="640" fill="#141b26"/>
+    <rect width="1200" height="470" fill="#1b2534"/>
+    <rect y="470" width="1200" height="170" fill="#232c3a"/>
+    <rect y="462" width="1200" height="8" fill="#12192455"/>
+    ${wallWindow(80,110,190,230,'#27374e')}
+    <text x="600" y="128" text-anchor="middle" font-family="var(--serif)" font-size="26" letter-spacing="6" fill="#c9b06b">MUTUAL &amp; TORRES</text>
+    <text x="600" y="152" text-anchor="middle" font-family="var(--mono)" font-size="12" letter-spacing="5" fill="#5d6b7e">ASSURANCE HOUSE · EST. 2023</text>
+    <g><rect x="860" y="150" width="150" height="200" rx="6" fill="#202b3c" stroke="#2c394a"/>
+      <text x="935" y="180" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#d9a648" letter-spacing="1">IFRS 17 · B101</text>
+      <line x1="880" y1="200" x2="990" y2="200" stroke="#3b4a5f"/><line x1="880" y1="225" x2="990" y2="225" stroke="#3b4a5f"/>
+      <line x1="880" y1="250" x2="970" y2="250" stroke="#3b4a5f"/><line x1="880" y1="275" x2="990" y2="275" stroke="#3b4a5f"/>
+      <line x1="880" y1="300" x2="950" y2="300" stroke="#3b4a5f"/></g>
+    ${person(475,262,0.9,'#8b98aa','#3c4759','staff2')}
+    <g><rect x="330" y="330" width="290" height="120" rx="8" fill="#26354c"/><rect x="330" y="318" width="290" height="16" rx="6" fill="#31445e"/>
+      <text x="475" y="400" text-anchor="middle" font-family="var(--mono)" font-size="12" letter-spacing="3" fill="#5d6b7e">RECEPTION</text>
+      <g><rect x="356" y="282" width="50" height="36" rx="3" fill="#131a24" stroke="#3b4a5f"/>
+        <rect x="360" y="286" width="42" height="28" rx="2" fill="#27374e"/>
+        <line x1="365" y1="294" x2="392" y2="294" stroke="#4a5d78" stroke-width="1.5"/>
+        <line x1="365" y1="301" x2="386" y2="301" stroke="#4a5d78" stroke-width="1.5"/>
+        <line x1="365" y1="308" x2="395" y2="308" stroke="#4a5d78" stroke-width="1.5"/></g>
+      <g><rect x="424" y="311" width="36" height="4" rx="1" fill="#aab4c2"/>
+        <rect x="427" y="306" width="36" height="4" rx="1" fill="#c1c9d4" transform="rotate(-3 445 308)"/>
+        <rect x="425" y="301" width="36" height="4" rx="1" fill="#d6dbe2" transform="rotate(2 443 303)"/></g>
+      <path d="M498,318 a7,7 0 0 1 14,0 Z" fill="#d9a648"/><circle cx="505" cy="309" r="1.7" fill="#d9a648"/>
+      <g transform="translate(575,296)"><rect x="-44" y="-14" width="88" height="21" rx="3" fill="#d9a648"/><path d="M-5,7 l5,7 5,-7 Z" fill="#d9a648"/><text y="1.5" text-anchor="middle" font-family="var(--mono)" font-size="10" letter-spacing="1" fill="#131a24">SPEAK TO US</text></g></g>
+    ${person(720,380,1.15,'#72b7cc','#274b59')}
+    <text x="720" y="498" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">ANA</text>
+    <g transform="translate(742,338)"><g class="thought"><circle cx="-8" cy="-4" r="2.5" fill="#e9eef5"/><circle cx="-2.5" cy="-12" r="3.5" fill="#e9eef5"/><rect x="-108" y="-98" width="188" height="70" rx="17" fill="#e9eef5"/><text x="-14" y="-76" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="500" fill="#131a24">How do I put my 1,000</text><text x="-14" y="-58" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="500" fill="#131a24">into insurance that also</text><text x="-14" y="-40" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="500" fill="#131a24">invests in the market?</text></g></g>
+    <g><ellipse cx="1090" cy="475" rx="30" ry="8" fill="#1b2431"/>
+      <path d="M1090,472 q-14,-52 8,-76 M1090,472 q16,-40 -4,-68 M1090,472 q-2,-60 20,-60" stroke="#3f6b52" stroke-width="5" fill="none"/>
+      <rect x="1068" y="472" width="44" height="34" rx="6" fill="#2c394a"/></g>
+    <g><rect x="150" y="380" width="120" height="90" rx="6" fill="#243347"/>
+      <rect x="160" y="390" width="27" height="38" rx="2" fill="#31445e"/><rect x="196" y="390" width="27" height="38" rx="2" fill="#3a4a61"/><rect x="232" y="390" width="27" height="38" rx="2" fill="#31445e"/>
+      <text x="210" y="452" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">GUIDES</text></g>
+    ${hotspot(935,130,'?','poster','','READ')}
+    ${hotspot(210,358,'?','brochures','q','READ')}
+    ${hotspot(475,206,'!','ana','','TALK')}
+  </svg>`);
+  const P=prog('lobby');
+  const hs={poster:!!P.poster,ana:!!P.ana,broch:!!P.broch};
+  bindHotspots(sc,{
+    poster:async(g)=>{
+      await teach('B101: the three conditions, word for word',
+        `<p>A contract has <strong>direct participation features</strong> only if, <em>at inception</em>, all three hold:</p>
+         <p>(a) the terms specify the policyholder participates in a share of a <strong>clearly identified pool</strong> of underlying items;</p>
+         <p>(b) the entity expects to pay the policyholder an amount equal to a <strong>substantial share of the fair-value returns</strong> on those items;</p>
+         <p>(c) the entity expects a <strong>substantial proportion of any change</strong> in the amounts paid to <strong>vary with the change in fair value</strong> of the items.</p>
+         <p>Miss any one and the contract is measured under the general model (GMM).</p>`,['B101(a)–(c)']);
+      g.classList.add('done');hs.poster=true;P.poster=1;save();check();
+    },
+    brochures:async()=>{await teach('VFA vs GMM, in one line each',
+      `<p><strong>GMM:</strong> the insurer earns a margin priced into fixed-ish promises. The CSM accretes interest at rates locked in at inception; changes arising from financial risk generally do not adjust the CSM and are presented as insurance finance income/expense, in P&L or split with OCI by policy choice.</p>
+       <p><strong>VFA:</strong> the insurer's profit <em>is</em> a fee carved out of a pool it manages for the policyholder, so the entity's share of pool performance, and financial effects on the rest, resize the unearned profit (CSM) instead.</p>`,['B101','B104']);hs.broch=true;P.broch=1;save();check();},
+    ana:async(g)=>{
+      await talk(sc,[
+        {w:'sys',t:'The doors sigh open. A visitor crosses the lobby with the stride of someone who reads footnotes.'},
+        {w:'ph',n:'Ana Torres · visitor',t:'“I have 1,000 to invest. I want it in a real fund I can see, moving with the market, and I want life cover on top. What I don’t want is a black box.”'},
+        {w:'act',n:'Receptionist',t:'“Then you want the underwriting office, first door on the right. They decide what kind of contract this is, and which accounting model it lives under.”'},
+        {w:'ph',n:'Ana Torres',t:'“Accounting model? I just want my fund.”'},
+        {w:'sys',t:'That, as you are about to learn, is exactly what decides the accounting model.'},
+      ]);
+      g.classList.add('done');hs.ana=true;P.ana=1;save();check();
+    },
+  });
+  function check(){
+    if(fresh)setObjective('Objective: '+(hs.ana?'<b>✓ talked</b>':'<b>TALK at the desk</b>')+' · '+(hs.poster?'<b>✓ poster</b>':'<b>READ the B101 poster</b>')+' · '+(hs.broch?'<b>✓ guides</b>':'<b>READ the guides</b>'));
+    if(hs.poster&&hs.ana&&hs.broch){completeRoom('lobby');setObjective('Room complete ✓ · the underwriting office is unlocked');doorOut(sc);}
+  }
+  if(fresh&&(hs.poster||hs.ana||hs.broch)){
+    const mk=id=>{const g=[...sc.querySelectorAll('.hs')].find(h=>h.dataset.hs===id);if(g)g.classList.add('done');};
+    if(hs.poster)mk('poster'); if(hs.ana)mk('ana'); if(hs.broch)mk('brochures');
+    check();
+  }
+  if(!fresh)doorOut(sc);
+}
+
+/* ================= ROOM: UNDERWRITING ================= */
+const FILES={
+  f1:{tag:'FILE 01 · UNIT-LINKED',title:'UnitLife Saver',
+    why:'Why it is on the desk: this is the contract Ana asked for at reception. Classify it, and it can go upstairs to be priced.',items:[
+      'Premium buys units in the <strong>Global Balanced Fund</strong>, named in the contract',
+      'Policyholder receives the fund value at maturity or death',
+      'Death benefit adds 5% of the account on top (the excess)',
+      'Entity charges a fee of 20% of the fund’s returns'],
+    quizzes:[
+      {kicker:'Classification call',q:'UnitLife Saver: which measurement model?',options:[
+        {t:'VFA: all three B101 conditions hold on assessment',ok:true,why:'The fund is <strong>clearly identified in the contract</strong> (a); Ana is expected to receive a substantial share of its fair-value returns (b); and what she is paid is expected to move nearly one-for-one with the fund’s fair value (c). Conditions (b) and (c) are <strong>assessed, not read off a label</strong>: over the contract’s whole duration, on a present-value, probability-weighted basis, including what the guarantee does in bad scenarios (B107–B108). Here the assessment passes. The 20%-of-returns fee is the <em>variable fee</em> you will price upstairs.'},
+        {t:'GMM: there is a guaranteed death benefit, so it can’t be VFA',why:'A guarantee doesn’t automatically disqualify a contract, but it isn’t ignored either: B107’s probability-weighted assessment includes the scenarios where the guarantee bites. A heavy guarantee can erode variability until (c) fails. This 5% excess on top of the account leaves all three conditions intact.'},
+        {t:'GMM: the entity keeps part of the returns, so the share isn’t substantial',why:'“Substantial” doesn’t mean “all”, and B107 sets <strong>no bright-line percentage</strong>. You assess the share over the contract’s duration on a present-value, probability-weighted basis. On that assessment Ana’s 80% passes here, but it passes on the assessment, not because 80 is a magic number. The entity keeping a fee is exactly what makes it a <em>variable-fee</em> contract.'}],cite:['B101(a)–(c)','B107–B108']},
+      {kicker:'Follow-up',q:'When do you perform this B101 assessment?',options:[
+        {t:'At inception only: not revisited as markets move',ok:true,why:'Eligibility is assessed <strong>once, at inception</strong>, using expectations over the contract’s life. A bad year for the fund later does not reclassify the contract (only a modification could).'},
+        {t:'At every reporting date',why:'That would make classification flip with markets. B102 fixes the assessment at inception.'},
+        {t:'Whenever actual returns deviate from expectations',why:'Deviations are experience, not classification. The inception-date expectation is what counts (B102).'}],cite:['B102']}]},
+  f2:{tag:'FILE 02 · TRADITIONAL',title:'SteadyGrowth 4%',
+    why:'Why it is on the desk: a lookalike sold with the same brochure language. Read the terms; it shows what fails the test.',items:[
+      'Premium goes into the entity’s <strong>general account</strong>',
+      'Contract credits a <strong>fixed 4% per year</strong>, whatever markets do',
+      'No asset pool is named anywhere in the contract'],
+    quizzes:[
+      {kicker:'Classification call',q:'SteadyGrowth 4%: which measurement model?',options:[
+        {t:'GMM: it fails B101 at the first hurdle',ok:true,why:'No <strong>clearly identified pool</strong> in the contract (fails (a)), and a fixed 4% credit means payments don’t vary with any pool’s fair value (fails (b) and (c)). General model: the entity keeps the spread, and finance effects run through IFIE.'},
+        {t:'VFA: the entity does invest the premium in assets',why:'What the entity does with the money is irrelevant if the <em>contract</em> doesn’t link payments to an identified pool. B101(a) is about contractual terms, not asset management practice.'},
+        {t:'VFA: 4% is a share of the returns',why:'A fixed credit is the opposite of participation: when the pool earns 12% or −8%, the 4% doesn’t move. Condition (c) fails outright.'}],cite:['B101(a)','B101(c)']}]},
+  f3:{tag:'FILE 03 · CEDED',title:'Reinsurance of the UnitLife book',
+    why:'Why it is on the desk: the reinsurance desk wants half the UnitLife book ceded, and assumes the accounting follows the underlying.',items:[
+      'You cede 50% of the UnitLife Saver portfolio to a reinsurer',
+      'The underlying contracts are direct-participation (file 01)',
+      'The reinsurance desk asks: “VFA for the ceded side too, right?”'],
+    quizzes:[
+      {kicker:'Classification call',q:'The reinsurance held on the UnitLife book: VFA?',options:[
+        {t:'No: reinsurance contracts can never use the VFA',ok:true,why:'B109 excludes <strong>reinsurance held and issued</strong> from the VFA, even when the underlying business is direct-participation. Insurer and reinsurer don’t share a pool with each other; measure under the general model (or PAA if eligible).'},
+        {t:'Yes: it inherits the classification of the underlying contracts',why:'Classification doesn’t travel through reinsurance. The ceded contract is between two entities, neither a policyholder participating in a pool, B109 shuts the door.'},
+        {t:'Yes, if the reinsurance premium varies with the fund',why:'Even a fund-linked premium doesn’t help: B109 is categorical.'}],cite:['B109']}]},
+};
+async function roomUnderwriting(){
+  const fresh=!S.done.underwriting;
+  const {sc,mount}=sceneShell('underwriting', fresh?'Objective: files <b>0/3</b> · <b>READ the test poster</b>':'Room complete · replay freely');
+  mount(`<svg viewBox="0 0 1200 640">
+    <rect width="1200" height="640" fill="#131a25"/>
+    <rect width="1200" height="465" fill="#192230"/>
+    <rect y="465" width="1200" height="175" fill="#20293a"/>
+    ${wallWindow(950,110,180,220,'#22344c')}
+    <g><rect x="70" y="100" width="360" height="230" rx="6" fill="#2a2419" stroke="#4a3d22"/>
+      <text x="250" y="136" text-anchor="middle" font-family="var(--mono)" font-size="15" letter-spacing="2" fill="#d9a648">THE B101 TEST</text>
+      <text x="92" y="176" font-family="var(--sans)" font-size="16" fill="#a8996f">(a) identified pool, in the contract</text>
+      <text x="92" y="210" font-family="var(--sans)" font-size="16" fill="#a8996f">(b) substantial share of FV returns</text>
+      <text x="92" y="244" font-family="var(--sans)" font-size="16" fill="#a8996f">(c) payments vary with fair value</text>
+      <text x="92" y="292" font-family="var(--mono)" font-size="14" fill="#7a6c45">ALL THREE, OR IT'S NOT VFA.</text>
+      <circle cx="90" cy="98" r="4" fill="#8b6f36"/><circle cx="410" cy="98" r="4" fill="#8b6f36"/></g>
+    <g><rect x="430" y="380" width="560" height="24" rx="5" fill="#3a2f1d"/><rect x="450" y="404" width="18" height="90" fill="#2b2315"/><rect x="950" y="404" width="18" height="90" fill="#2b2315"/>
+      <rect x="470" y="340" width="90" height="42" rx="3" fill="#c9a25a" transform="rotate(-2 515 361)"/>
+      <text x="515" y="366" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#4a3a17" transform="rotate(-2 515 361)">FILE 01</text>
+      <rect x="620" y="336" width="90" height="46" rx="3" fill="#b8934f" transform="rotate(1.5 665 359)"/>
+      <text x="665" y="364" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#4a3a17" transform="rotate(1.5 665 359)">FILE 02</text>
+      <rect x="770" y="341" width="90" height="41" rx="3" fill="#d3ab61" transform="rotate(-1 815 361)"/>
+      <text x="815" y="366" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#4a3a17" transform="rotate(-1 815 361)">FILE 03</text>
+      <ellipse cx="920" cy="372" rx="14" ry="8" fill="#5a4326"/><rect x="912" y="352" width="16" height="20" rx="3" fill="#7a5c33"/></g>
+    ${person(1080,395,1.0,'#8b98aa','#3c4759')}
+    <text x="1080" y="502" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">UNDERWRITER</text>
+    ${hotspot(250,88,'?','poster','q','READ')}
+    ${hotspot(515,318,'!','f1','','OPEN')}
+    ${hotspot(665,314,'!','f2','','OPEN')}
+    ${hotspot(815,319,'!','f3','','OPEN')}
+  </svg>`);
+  const P=prog('underwriting');
+  if(fresh&&!P.intro){
+    await talk(sc,[
+      {w:'sys',t:'The underwriting office. Every contract in the house starts here, with one question: which measurement model does it live under?'},
+      {w:'uw',n:'Underwriter',t:'“You make the classification calls today. Three files on the desk. File 01 is the product Ana just asked for at reception. The other two sharpen your eye: a lookalike from the old shelf, and a question the reinsurance desk keeps asking.”'},
+      {w:'uw',n:'Underwriter',t:'“The test is on the wall. B101: an identified pool, a substantial share, payments that vary with it. All three, or it is not VFA. Open each file and make the call.”'},
+    ]);
+    P.intro=1;save();
+  }
+  const doneFiles=Object.assign({},P.files||{});
+  let filesDone=(!fresh)||Object.keys(doneFiles).length===3, posterRead=(!fresh)||!!P.poster;
+  const maybeDone=()=>{ if(!(filesDone&&posterRead)||S.done.underwriting)return;
+    completeRoom('underwriting');
+    setObjective('Room complete ✓ · the actuarial studio is unlocked');
+    doorOut(sc); };
+  const openFile=(id)=>async(g)=>{
+    const f=FILES[id];
+    /* file cover modal */
+    await new Promise(res=>{
+      const card=el('div','mcard');
+      card.append(el('div','qk',f.tag));
+      card.append(el('h4','',f.title));
+      if(f.why)card.append(el('p','fy',f.why));
+      const ul=el('ul','file-list');f.items.forEach(i=>ul.append(el('li','',i)));card.append(ul);
+      const foot=el('div','mfoot');const b=el('button','cta big','Make the call');
+      b.onclick=()=>{closeModal();res();};foot.append(b);card.append(foot);
+      openModal(card,false);
+    });
+    for(const qz of f.quizzes){qz.ctx='<div class="memo"><strong>'+f.tag+' · '+f.title+'</strong><br>'+f.items.join('<br>')+'</div>';await quiz(qz,fresh);}
+    g.classList.add('done');doneFiles[id]=true;P.files=doneFiles;save();
+    const n=Object.keys(doneFiles).length;
+    if(fresh)setObjective('Objective: files <b>'+n+'/3</b> · '+(posterRead?'<b>✓ poster</b>':'<b>READ the test poster</b>'));
+    if(n===3){
+      await talk(sc,[
+        {w:'aud',n:'Auditor · preliminary note',t:'“Classification memo accepted. One VFA contract, one GMM, one firmly-not-VFA reinsurance. Ana’s file goes upstairs, the actuarial studio prices it.”'},
+      ]);
+      filesDone=true;
+      if(fresh&&!posterRead)setObjective('Objective: files <b>3/3</b> · <b>READ the test poster</b>');
+      maybeDone();
+    }
+  };
+  bindHotspots(sc,{
+    poster:async()=>{await teach('Why “all three”?',
+      `<p>The VFA exists for contracts that are, in substance, <strong>investment management with insurance wrapped around it</strong>. The three B101 conditions are how the standard checks that substance: an identified pool (a), a genuine share of it (b), and real variability (c). If the entity merely invests premiums for its own account, however prudently, the policyholder isn’t participating.</p>
+       <p>Two footnotes to the slogan on the wall. “Substantial” has <strong>no bright-line percentage</strong>: (b) and (c) are assessed over the contract’s duration on a present-value, probability-weighted basis (B107–B108). And a contract that fails the test lands in the <strong>general model, or the simpler premium allocation approach if it qualifies</strong> (para 53), so “not VFA” does not always mean full GMM machinery.</p>`,['B101','B107–B108','53']);posterRead=true;P.poster=1;save();maybeDone();if(fresh&&!S.done.underwriting)setObjective('Objective: files <b>'+Object.keys(doneFiles).length+'/3</b> · <b>✓ poster</b>');},
+    f1:openFile('f1'), f2:openFile('f2'), f3:openFile('f3'),
+  });
+  if(fresh){
+    const mk=id=>{const g=[...sc.querySelectorAll('.hs')].find(h=>h.dataset.hs===id);if(g)g.classList.add('done');};
+    for(const id in doneFiles)mk(id);
+    if(posterRead)mk('poster');
+    const n0=Object.keys(doneFiles).length;
+    if(n0||posterRead)setObjective('Objective: files <b>'+n0+'/3</b> · '+(posterRead?'<b>✓ poster</b>':'<b>READ the test poster</b>'));
+  }
+  if(!fresh)doorOut(sc);
+}
+
+/* ================= ROOM: ACTUARIAL STUDIO ================= */
+async function roomStudio(){
+  const fresh=!S.done.studio;
+  const {sc,mount}=sceneShell('studio', fresh?'Objective: chalkboard & desk <b>0/5</b> (incl. READ the RA jar)':'Room complete · replay freely');
+  mount(`<svg viewBox="0 0 1200 640">
+    <rect width="1200" height="640" fill="#121a22"/>
+    <rect width="1200" height="460" fill="#17222b"/>
+    <rect y="460" width="1200" height="180" fill="#1f2a33"/>
+    <g><rect x="270" y="80" width="560" height="330" rx="8" fill="#152218" stroke="#3a4a3f" stroke-width="4"/>
+      <text x="550" y="116" text-anchor="middle" font-family="var(--serif)" font-size="19" fill="#cfe0d2" letter-spacing="1">Day one: building the CSM</text>
+      <g id="wf"></g>
+      <line x1="300" y1="370" x2="800" y2="370" stroke="#3a4a3f" stroke-width="2"/>
+    </g>
+    <g><rect x="880" y="330" width="240" height="18" rx="4" fill="#31445e"/><rect x="900" y="348" width="14" height="115" fill="#243347"/><rect x="1080" y="348" width="14" height="115" fill="#243347"/>
+      <rect x="915" y="290" width="60" height="40" rx="4" fill="#223047"/>
+      <g><ellipse cx="1030" cy="318" rx="24" ry="12" fill="#2c3a52"/><rect x="1006" y="286" width="48" height="32" rx="8" fill="#33435e"/>
+        <text x="1030" y="308" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#d9a648">RA</text></g></g>
+    <g><rect x="80" y="330" width="150 " height="133" rx="8" fill="#2b3547"/><rect x="88" y="338" width="134" height="80" rx="4" fill="#1a2434"/>
+      <text x="155" y="384" text-anchor="middle" font-family="var(--serif)" font-size="34" fill="#d9a648">$</text>
+      <circle cx="155" cy="438" r="9" fill="#3b4a5f"/></g>
+    ${person(990,400,1.05,'#d9a648','#6b5222','actuary')}
+    <text x="990" y="510" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">CHIEF ACTUARY</text>
+    ${hotspot(1030,272,'?','rajar','q','READ')}
+    ${hotspot(155,312,'!','premium','','ASK')}
+    ${hotspot(550,430,'!','board','','SOLVE')}
+  </svg>`);
+  const wf=sc.querySelector('#wf');
+  /* waterfall geometry: base y=370, 5px per unit */
+  const U=5, BASE=370;
+  function bar(x,units,fromUnits,color,label,sub){
+    const h=Math.abs(units)*U;
+    const yTop = BASE - Math.max(fromUnits, fromUnits+units)*U;
+    return {x,h,yTop,color,label,sub};
+  }
+  const BARS=[
+    bar(320,35,0,'#72b7cc','Fees','PV 35'),
+    bar(430,-6,35,'#e06a5e','Claims','−6'),
+    bar(540,-4,29,'#e06a5e','Expenses','−4'),
+    bar(650,-5,25,'#b78bc9','RA','−5'),
+    bar(760,20,0,'#d9a648','Fee = CSM','= 20'),
+  ];
+  let wfN=0;
+  function growBar(i){
+    const b=BARS[i];
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.innerHTML=`<rect class="wf-bar" x="${b.x}" y="${BASE}" width="70" height="0" rx="3" fill="${b.color}" opacity=".9"/>
+      <text x="${b.x+35}" y="${BASE+22}" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#9fb3a6">${b.label}</text>
+      <text x="${b.x+35}" y="${b.yTop-8}" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#cfe0d2">${b.sub}</text>`;
+    wf.append(g);
+    const r=g.querySelector('rect');
+    requestAnimationFrame(()=>{r.setAttribute('y',b.yTop);r.setAttribute('height',b.h);});
+  }
+  const P=prog('studio');
+  const MEMO='<div class="memo"><strong>Inception memo, so you do not have to remember:</strong><br>PV of future fees <b>35</b> · PV of excess death claims <b>6</b> · PV of attributable expenses <b>4</b> · Risk adjustment <b>5</b></div>';
+  let boardStep=P.board||0, premiumDone=!!P.premium, rajarRead=(!fresh)||!!P.rajar;
+  async function updateObj(){
+    if(fresh)setObjective('Objective: chalkboard & desk <b>'+(boardStep+(premiumDone?1:0)+(rajarRead?1:0))+'/5</b>'+(rajarRead?'':' · <b>READ the RA jar</b>'));
+    if(boardStep>=3&&premiumDone&&rajarRead){
+      if(fresh&&!P.paid){applyDeltas({account:1000,ra:5,csm:20});P.paid=1;save();}
+      await talk(sc,[
+        {w:'act',n:'Chief actuary',t:'“Booked: pool 1,000, today all of it Ana’s account, risk adjustment 5, CSM 20, and not a cent of profit on day one. That 20 is a promise to earn, not a boast. Upstairs, the market decides how the promise ages.”'},
+      ]);
+      completeRoom('studio');renderChips();
+      setObjective('Room complete ✓ · the market room is unlocked');
+      doorOut(sc);
+    }
+  }
+  bindHotspots(sc,{
+    rajar:async()=>{await teach('The jar marked RA',
+      `<p>The <strong>risk adjustment</strong> is the compensation the entity requires for bearing <em>non-financial</em> risk, here mostly mortality on the 5% excess benefit. It sits as its own liability component and releases to revenue as risk expires. One thing to hold on to: the RA is part of the <strong>fulfilment cash flows</strong>, so when B104 nets the fulfilment cash flows that do not vary with the pool off the entity’s share, the RA is netted with them: 35 − 10 − 5 = 20.</p>`,['37','81','B104']);rajarRead=true;P.rajar=1;save();updateObj();},
+    premium:async(g)=>{
+      if(g.classList.contains('done'))return;
+      await talk(sc,[
+        {w:'ph',n:'Ana Torres',t:'“Here’s the 1,000. Before you take it upstairs, does my premium count as your revenue now?”'},
+      ]);
+      await quiz({kicker:'Presentation check',q:'The 1,000 premium: how much of it is insurance revenue?',options:[
+        {t:'None of it: receiving cash is not service',ok:true,why:'No revenue arises when the premium is received; the cash lands on the balance sheet. And the <strong>account balance</strong>, the amount repayable to Ana in all circumstances, is an <strong>investment component</strong> that para 85 keeps out of insurance revenue and expenses, forever. IFRS 17 revenue is earned from service, not collected from premiums.'},
+        {t:'All 1,000: premiums are revenue',why:'That was IFRS 4. Under IFRS 17 the premium lands on the balance sheet; revenue is earned over time, and never from the investment component (para 85).'},
+        {t:'200: the entity’s 20% share',why:'The fee is earned over the contract’s life through the CSM machinery, not on day one. And the account itself is excluded from revenue outright (para 85).'}],cite:['85']},fresh);
+      g.classList.add('done');premiumDone=true;P.premium=1;save();updateObj();
+    },
+    board:async(g)=>{
+      if(g.classList.contains('done'))return;
+      if(boardStep===0){
+        await talk(sc,[
+          {w:'act',n:'Chief actuary',t:'“Inception memo, current assumptions: PV of future fees 35. PV of excess death claims 6. PV of attributable expenses 4. Risk adjustment 5. Let’s chalk it up, three questions, three bars.”'},
+        ]);
+        await quiz({kicker:'Chalkboard · step 1',intro:MEMO,q:'Which number is “the entity’s share of the fair value of the underlying items”?',options:[
+          {t:'35: the PV of the future fees',ok:true,why:'The entity’s share of the pool is what it expects to extract from the pool: the fee stream. Its PV, <span class="num">35</span>, opens the waterfall.'},
+          {t:'200: 20% of the 1,000 account',why:'The 20% applies to <em>returns</em>, not the balance. The entity’s share is the PV of expected fees: 35.'},
+          {t:'1,000: the fair value of the pool itself',why:'The pool belongs to the measurement, but the <em>entity’s share</em> of it is only the fee stream. The rest is Ana’s.'}],cite:['B104(b)(i)']},fresh);
+        growBar(0);boardStep=1;P.board=1;save();updateObj();
+      } else if(boardStep===1){
+        await quiz({kicker:'Chalkboard · step 2',intro:MEMO,q:'B104: variable fee = entity’s share of the pool’s FV, less fulfilment cashflows that do not vary with the pool. Fulfilment cashflows include the risk adjustment. So the variable fee is…',options:[
+          {t:'20: that is, 35 − (6 + 4) − 5',ok:true,why:'Excess death claims (<span class="num">6</span>) and attributable expenses (<span class="num">4</span>) are promised whatever the fund does, and the <strong>fulfilment cash flows include the risk adjustment</strong> (<span class="num">5</span>), which does not vary with the pool either. Net all of them off the entity’s share: <span class="num">35 − 10 − 5 = 20</span>.'},
+          {t:'25: that is, 35 − (6 + 4)',why:'Close, but the fulfilment cash flows <em>include the risk adjustment</em>, and it does not vary with the pool. B104 nets it off with the claims and expenses: the variable fee is 20, not 25.'},
+          {t:'30: 35 minus the risk adjustment',why:'The RA comes off, but so do the other non-varying fulfilment cashflows: the 6 and the 4. All of them together: 35 − 15 = 20.'}],cite:['B104']},fresh);
+        growBar(1);growBar(2);growBar(3);boardStep=2;P.board=2;save();updateObj();
+      } else {
+        await quiz({kicker:'Chalkboard · step 3',intro:MEMO,q:'The variable fee is 20. What CSM do you set up, and what hits P&L today?',options:[
+          {t:'CSM 20, P&L nil: the CSM is the day-one balancing item',ok:true,why:'para 38 makes the CSM absorb the day-one surplus so no profit is booked at inception. With nothing else on the inception file, the CSM equals the variable fee: <span class="num">20</span> of unearned profit, released as you serve.'},
+          {t:'CSM 15: the RA still has to come off the fee',why:'It already did. The RA is part of the fulfilment cash flows, so B104 netted it inside the variable fee: 35 − 10 − 5 = 20. Taking it off twice would double-count.'},
+          {t:'CSM 0, P&L 20: profit is recognized when priced',why:'That’s cash accounting. IFRS 17 sets up unearned profit at inception (para 38) and releases it over the service period.'}],cite:['38','B104']},fresh);
+        growBar(4);boardStep=3;P.board=3;save();g.classList.add('done');updateObj();
+      }
+    },
+  });
+  if(fresh){
+    const mk=id=>{const g=[...sc.querySelectorAll('.hs')].find(h=>h.dataset.hs===id);if(g)g.classList.add('done');};
+    if(boardStep>=1)growBar(0);
+    if(boardStep>=2){growBar(1);growBar(2);growBar(3);}
+    if(boardStep>=3){growBar(4);mk('board');}
+    if(premiumDone)mk('premium');
+    if(P.rajar)mk('rajar');
+    if(boardStep||premiumDone||P.rajar)updateObj();
+  }
+  if(!fresh){ [0,1,2,3,4].forEach(growBar); doorOut(sc); }
+}
+
+/* ================= ROOM: MARKET ROOM ================= */
+const EVENTS=[
+  {btn:'ev1',label:'Policyholder share',dest:'IFIE',deltas:{account:120},
+   qz:{kicker:'Event 1 · where does it go?',q:'The fund returned 12% vs 10% expected: the pool grows by 120, to 1,120. Per the contract, Ana’s account is credited 80% of the return, 96, so it stands at 1,096; the other 24 is the entity’s share, the raw material of your fees. Where does the growth in your obligation to Ana go?',options:[
+    {t:'IFIE: it mirrors the growth of her account',ok:true,why:'The liability to Ana grows exactly as her account grows: 1,000 + 96 = <span class="num">1,096</span>. That movement runs through <strong>insurance finance income/expense</strong> (B111), matched by investment income on the pool, so the net effect on your profit is essentially nil: it was never your money. The bridge to the books: pool <span class="num">1,120</span> = Ana’s account <span class="num">1,096</span> + the <span class="num">24</span> that funds your fees. The better-than-expected part of that 24 is the next event.'},
+    {t:'CSM: all market effects adjust the CSM under VFA',why:'Only the <em>entity’s</em> share of the pool touches the CSM. The policyholder’s share, the 96 credited to Ana’s account, is a financial liability movement: IFIE (B111).'},
+    {t:'Revenue: the account growth is earned',why:'The account is an investment component (para 85) and the 96 credited to it belongs to Ana. Nothing here is earned by you.'}],cite:['B111','87']}},
+  {btn:'ev2',label:'Entity share',dest:'CSM',deltas:{csm:4},
+   qz:{kicker:'Event 2 · where does it go?',q:'The entity’s share of the change in the pool’s fair value: the fund beat expectations by 20, your 20% of that is 4.0, so the PV of your future fees rises by 4.0. Where?',options:[
+    {t:'CSM +4.0: the variable fee got bigger',ok:true,why:'45(b)/B112 send the change in the <strong>entity’s share of the underlying items’ fair value</strong> into the CSM, this <em>replaces</em> GMM’s CSM interest accretion at inception-date rates. Good year → fatter variable fee → more unearned profit to release later.'},
+    {t:'IFIE: market effects are finance effects',why:'Under GMM, yes. Under VFA the entity’s share of pool performance is future-service profit, it adjusts the CSM (para 45(b), B112). This is the single biggest GMM/VFA difference.'},
+    {t:'P&L now: the good year already happened',why:'The <em>fees</em> haven’t been earned yet; their PV went up. Future service → CSM (para 45(b)).'}],cite:['45(b)','B112']}},
+  {btn:'ev3',label:'Mortality study',dest:'CSM',deltas:{csm:-1},
+   qz:{kicker:'Event 3 · where does it go?',q:'The annual mortality study worsens: PV of future excess death claims up 1.0, measured at current rates. Where?',options:[
+    {t:'CSM −1.0: future-service fulfilment cashflow change',ok:true,why:'Future-service FCF changes adjust the CSM (para 45(c), B113(a)), and under VFA they’re measured at <strong>current</strong> rates, not GMM’s locked-in rates. Your unearned profit absorbs the worse outlook: 20 + 4 − 1 = <span class="num">23</span> before release.'},
+    {t:'P&L now: assumptions changed, book the hit',why:'Only if it related to current or past service. Future excess claims are future service, the CSM absorbs it (para 45(c)); P&L feels it slowly, through smaller releases.'},
+    {t:'IFIE: discounting is involved',why:'The driver is a non-financial assumption (mortality), not rates. Future-service FCF changes go to the CSM (para 45(c)/B113(a)).'}],cite:['45(c)','B113(a)']}},
+  {btn:'ev4',label:'Claims miss',dest:'P&L',deltas:{pnl:-1},
+   qz:{kicker:'Event 4 · where does it go?',q:'Actual excess death claims this year: 4.0. Expected: 3.0. Where does the extra 1.0 go?',options:[
+    {t:'P&L now: an experience adjustment on current service',ok:true,why:'What already happened is <strong>current service</strong>: revenue shows the expected <span class="num">3.0</span>, insurance service expenses show the actual <span class="num">4.0</span>, and the miss lands in this year’s result. No CSM adjustment, the CSM is only for future service.'},
+    {t:'CSM: everything non-financial adjusts the CSM under VFA',why:'Only <em>future-service</em> changes do. This claim is paid and gone; current-service experience hits P&L directly.'},
+    {t:'Nowhere: it nets against the RA',why:'The RA releases as risk expires on schedule; it doesn’t mop up experience misses.'}],cite:['B96–B97 logic','83–84']}},
+  {btn:'ev5',label:'Rates what-if',dest:'CSM',deltas:null,
+   qz:{kicker:'Auditor pop quiz · hypothetical',q:'“Suppose interest rates fell, raising the PV of your non-varying cashflows: the expense and excess-claim promises. Under VFA, where would that financial effect go?”',options:[
+    {t:'CSM: B113(b) sends it there (GMM would send it to IFIE/OCI)',ok:true,why:'Under VFA even time-value-of-money and financial-risk effects on the <strong>non-varying</strong> FCF adjust the CSM (B113(b)), they resize the variable fee. Under GMM the same movement is finance income/expense. Another clean GMM/VFA divide, with one documented exception the auditor will show you next.'},
+    {t:'IFIE: financial effects are always finance effects',why:'Under GMM, yes. VFA’s B113(b) pulls financial effects on the non-varying cashflows into the CSM (unless the documented risk-mitigation option applies, next card).'},
+    {t:'P&L service result',why:'Nothing was serviced, it’s a measurement effect on future promises. Under VFA: CSM, per B113(b).'}],cite:['B113(b)']},
+   after:{title:'The important exception: risk mitigation (B115–B118)',html:`<p>“Financial effects go to the CSM” is the VFA rule, <strong>not an absolute</strong>. If the entity mitigates the financial risk of the variable fee, with derivatives, reinsurance held, or non-derivative instruments at fair value through P&amp;L, and has <strong>documented the risk-management objective and strategy in advance</strong> (B116), it may choose <em>not</em> to route those financial-risk changes into the CSM. They go to P&amp;L (or insurance finance income/expense) instead, where they meet the hedging instrument’s own gains and losses, so the books show the mitigation working rather than a one-sided swing in the CSM. The choice is applied prospectively and stops if the conditions lapse (B117–B118).</p>`,cites:['B115','B116','B117–B118']}},
+];
+async function roomMarket(){
+  const fresh=!S.done.market;
+  const {sc,mount}=sceneShell('market', fresh?'Objective: events <b>0/5</b> · <b>READ the GMM vs VFA sign</b>':'Room complete · replay freely');
+  mount(`<svg viewBox="0 0 1200 640">
+    <rect width="1200" height="640" fill="#101724"/>
+    <rect width="1200" height="450" fill="#141d2e"/>
+    <rect y="450" width="1200" height="190" fill="#1b2536"/>
+    <g><rect x="80" y="70" width="640" height="240" rx="8" fill="#0d1522" stroke="#2c394a"/>
+      <text x="100" y="100" font-family="var(--mono)" font-size="12" letter-spacing="2" fill="#5d6b7e">GLOBAL BALANCED FUND · YEAR ONE</text>
+      <line x1="100" y1="270" x2="700" y2="270" stroke="#22304288"/>
+      <line x1="100" y1="210" x2="700" y2="210" stroke="#22304244"/>
+      <line x1="100" y1="150" x2="700" y2="150" stroke="#22304244"/>
+      <polyline class="drawline" points="100,262 190,255 260,258 340,241 420,246 500,225 580,231 700,200" stroke="#63b380" stroke-width="2.5" fill="none"/>
+      <polyline points="100,262 700,215" stroke="#5d6b7e" stroke-width="1.5" stroke-dasharray="5 6" fill="none"/>
+      <text x="705" y="196" font-family="var(--mono)" font-size="12" fill="#63b380">+12%</text>
+      <text x="705" y="222" font-family="var(--mono)" font-size="12" fill="#5d6b7e">+10% exp.</text></g>
+    <clipPath id="tickclip"><rect x="80" y="330" width="640" height="26" rx="4"/></clipPath>
+    <rect x="80" y="330" width="640" height="26" rx="4" fill="#0b111c"/>
+    <g clip-path="url(#tickclip)">
+      <g class="ticker-tape"><text x="90" y="348" font-family="var(--mono)" font-size="12" fill="#8b98aa" letter-spacing="1">GBF +12.0%&#160;&#160;·&#160;&#160;EXP +10.0%&#160;&#160;·&#160;&#160;MORTALITY STUDY REV 1.02x&#160;&#160;·&#160;&#160;EXCESS CLAIMS 4.0 v 3.0&#160;&#160;·&#160;&#160;GBF +12.0%&#160;&#160;·&#160;&#160;EXP +10.0%&#160;&#160;·&#160;&#160;MORTALITY STUDY REV 1.02x&#160;&#160;·&#160;&#160;EXCESS CLAIMS 4.0 v 3.0</text></g></g>
+    <g id="console"><rect x="770" y="90" width="350" height="290" rx="10" fill="#182234" stroke="#2c394a"/>
+      <text x="945" y="122" text-anchor="middle" font-family="var(--mono)" font-size="12" letter-spacing="3" fill="#d9a648">WHERE TO BOOK IT?</text>
+      <g id="pipe-CSM"><rect x="800" y="145" width="290" height="56" rx="8" fill="#1e2a3e" stroke="#3b4a5f"/>
+        <text x="820" y="178" font-family="var(--mono)" font-size="14" fill="#d9a648">CSM</text>
+        <text x="1075" y="178" text-anchor="end" font-family="var(--sans)" font-size="13" fill="#5d6b7e">unearned profit grows or shrinks</text></g>
+      <g id="pipe-IFIE"><rect x="800" y="215" width="290" height="56" rx="8" fill="#1e2a3e" stroke="#3b4a5f"/>
+        <text x="820" y="248" font-family="var(--mono)" font-size="14" fill="#72b7cc">IFIE</text>
+        <text x="1075" y="248" text-anchor="end" font-family="var(--sans)" font-size="13" fill="#5d6b7e">finance income / expense</text></g>
+      <g id="pipe-P&L"><rect x="800" y="285" width="290" height="56" rx="8" fill="#1e2a3e" stroke="#3b4a5f"/>
+        <text x="820" y="318" font-family="var(--mono)" font-size="14" fill="#e0b74e">P&amp;L</text>
+        <text x="1075" y="318" text-anchor="end" font-family="var(--sans)" font-size="13" fill="#5d6b7e">this period’s service result</text></g></g>
+    <g><rect x="130" y="570" width="120" height="46" rx="8" fill="#182234" stroke="#2c394a"/>
+      <rect x="148" y="562" width="84" height="10" rx="3" fill="#0b111c" stroke="#2c394a"/>
+      <circle class="doorglow" cx="238" cy="592" r="4" fill="#d9a648"/>
+      <text id="evcount" x="184" y="601" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">EVENT 1 OF 5</text></g>
+    <g id="eventrow"></g>
+    ${person(1030,480,1.0,'#e06a5e','#5c2f2a')}
+    ${person(1120,480,1.0,'#8b98aa','#3c4759')}
+    <text x="1030" y="586" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">AUDITOR</text>
+    <text x="1120" y="586" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">TRADER</text>
+    <g><rect x="320" y="36" width="150" height="46" rx="6" fill="#182234" stroke="#3b4a5f"/>
+      <text x="395" y="56" text-anchor="middle" font-family="var(--mono)" font-size="12" letter-spacing="2" fill="#8b98aa">GMM vs VFA</text>
+      <text x="395" y="72" text-anchor="middle" font-family="var(--sans)" font-size="11" fill="#5d6b7e">same year, two worlds</text></g>
+    ${hotspot(492,60,'?','plaque','q','READ')}
+  </svg>`);
+  /* event buttons appear one at a time on the desk row */
+  const row=sc.querySelector('#eventrow');
+  const P=prog('market');
+  let idx = fresh?(P.doneN||0):EVENTS.length, doneN=fresh?(P.doneN||0):EVENTS.length, plaqueRead=(!fresh)||!!P.plaque;
+  function placeEvent(i){
+    if(i>=EVENTS.length)return finish();
+    const ev=EVENTS[i];
+    const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.setAttribute('class','hs');g.setAttribute('data-hs',ev.btn);g.setAttribute('transform','translate(190,506)');
+    g.setAttribute('tabindex','0');
+    const cnt=sc.querySelector('#evcount');if(cnt)cnt.textContent='EVENT '+(i+1)+' OF 5';
+    g.innerHTML=`<circle class="halo" r="50"/><circle class="pulse" r="34" style="transform-origin:0 0"/>
+      <g class="evcard">
+        <rect x="-88" y="-35" width="176" height="64" rx="8" fill="#1c2634" stroke="#3b4a5f"/>
+        <text class="hdr" y="-16">INCOMING EVENT</text>
+        <line x1="-66" y1="-7" x2="66" y2="-7" stroke="#2c394a"/>
+        <text y="16">${ev.label}</text>
+      </g>`;
+    row.append(g);
+    if(!RM){ g.style.opacity='0';
+      g.animate([{opacity:0},{opacity:1}],{duration:450,delay:400,easing:'ease',fill:'both'})
+       .finished.then(()=>{g.style.opacity='1';}).catch(()=>{g.style.opacity='1';});
+      setTimeout(()=>{g.style.opacity='1';},1400); }
+    const fire=async()=>{
+      if(HS_BUSY)return;
+      HS_BUSY=true;
+      try{
+      await quiz(ev.qz,fresh);
+      if(ev.after)await teach(ev.after.title,ev.after.html,ev.after.cites);
+      if(fresh&&ev.deltas)applyDeltas(ev.deltas);
+      const pipe=sc.querySelector('#pipe-'+(ev.dest==='P&L'?'P\\&L':ev.dest)) || sc.getElementById && sc.getElementById('pipe-'+ev.dest);
+      const pg=[...sc.querySelectorAll('#console g')].find(p=>p.id==='pipe-'+ev.dest);
+      if(pg){const r=pg.querySelector('rect');
+        r.animate([{stroke:'#3b4a5f',strokeWidth:1},{stroke:'#d9a648',strokeWidth:3},{stroke:'#3b4a5f',strokeWidth:1}],{duration:900});}
+      g.remove();doneN++;idx++;P.doneN=doneN;save();
+      if(fresh)setObjective('Objective: events <b>'+doneN+'/5</b> · '+(plaqueRead?'<b>✓ sign</b>':'<b>READ the GMM vs VFA sign</b>'));
+      placeEvent(idx);
+      } finally { HS_BUSY=false; refreshNext(); }
+    };
+    g.addEventListener('click',fire);
+    g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();fire();}});
+  }
+  async function finish(){
+    const cnt=sc.querySelector('#evcount');if(cnt)cnt.textContent='ALL 5 BOOKED';
+    if(S.done.market){doorOut(sc);return;}
+    if(!plaqueRead){setObjective('Objective: events <b>5/5</b> · <b>READ the GMM vs VFA sign</b>');return;}
+    await talk(sc,[
+      {w:'aud',n:'Auditor',t:'“Policyholder share to finance, entity share and future-service changes to the CSM, experience to the result. Books before release: pool 1,120, of which Ana’s account 1,096 and your fee share 24, CSM 23.0. One thing left, earning some of it, at the release desk.”'},
+    ]);
+    completeRoom('market');
+    setObjective('Room complete ✓ · the release desk is unlocked');
+    doorOut(sc);
+  }
+  bindHotspots(sc,{plaque:async()=>{await teach('The sign above the chart: GMM vs VFA in one row',
+    `<p>Same 12% year, two worlds. <strong>GMM:</strong> the CSM accretes interest at rates locked in at inception; changes arising from financial risk generally do not adjust the CSM and are presented as insurance finance income/expense, in P&amp;L or split with OCI by policy choice. <strong>VFA:</strong> the CSM accretes nothing, instead the <em>entity’s share of pool performance</em> resizes it (para 45(b)), and even financial effects on the non-varying cashflows follow (B113(b)), unless the documented risk-mitigation option of B115–B118 is used. The variable fee is a stake in the pool, and the CSM is where that stake lives until earned.</p>`,['45(b)','B112','B113(b)','B115–B118']);plaqueRead=true;P.plaque=1;save();if(doneN>=EVENTS.length)await finish();}});
+  if(fresh){
+    if(P.plaque){const g=[...sc.querySelectorAll('.hs')].find(h=>h.dataset.hs==='plaque');if(g)g.classList.add('done');}
+    if(doneN||P.plaque)setObjective('Objective: events <b>'+doneN+'/5</b> · '+(plaqueRead?'<b>✓ sign</b>':'<b>READ the GMM vs VFA sign</b>'));
+    placeEvent(idx);
+  } else {finish();}
+}
+
+/* ================= ROOM: RELEASE DESK ================= */
+async function roomRelease(){
+  const fresh=!S.done.release;
+  const {sc,mount}=sceneShell('release', fresh?'Objective: earn year one <b>0/5</b> (incl. READ the dial)':'Room complete · replay freely');
+  mount(`<svg viewBox="0 0 1200 640">
+    <rect width="1200" height="640" fill="#101a1c"/>
+    <rect width="1200" height="455" fill="#152224"/>
+    <rect y="455" width="1200" height="185" fill="#1d2b2d"/>
+    ${wallWindow(90,100,180,220,'#1f3540')}
+    <g>
+      <rect x="430" y="120" width="120" height="260" rx="10" fill="#20304a" stroke="#31445e" stroke-width="2"/>
+      <rect id="tank" x="438" y="${380-23*4.6}" width="104" height="${23*4.6}" rx="6" fill="#d9a648" opacity=".88"/>
+      <text x="490" y="106" text-anchor="middle" font-family="var(--mono)" font-size="12" letter-spacing="2" fill="#8b98aa">CSM TANK</text>
+      <text id="tankval" x="490" y="255" text-anchor="middle" font-family="var(--mono)" font-size="20" fill="#131a24" font-weight="700">23.0</text>
+      <rect x="550" y="330" width="120" height="14" fill="#31445e"/>
+      <circle id="valve" cx="610" cy="337" r="16" fill="#182436" stroke="#d9a648" stroke-width="2"/>
+      <path d="M602,337 h16 M610,329 v16" stroke="#d9a648" stroke-width="2"/>
+      <rect x="670" y="300" width="130" height="110" rx="8" fill="#14202c" stroke="#31445e"/>
+      <rect id="beaker" x="676" y="404" width="118" height="0" rx="4" fill="#63b380" opacity=".85"/>
+      <text x="735" y="290" text-anchor="middle" font-family="var(--mono)" font-size="12" letter-spacing="2" fill="#8b98aa">P&amp;L BEAKER</text>
+    </g>
+    <g><rect x="880" y="140" width="230" height="150" rx="10" fill="#182430" stroke="#2c394a"/>
+      <text x="995" y="163" text-anchor="middle" font-family="var(--mono)" font-size="12" letter-spacing="2" fill="#d9a648">COVERAGE UNITS</text>
+      <g transform="translate(995,254)">
+        <path d="M-52,0 A52,52 0 0 1 52,0" fill="none" stroke="#2c394a" stroke-width="12"/>
+        <path id="dialarc" d="M-52,0 A52,52 0 0 1 0,-52" fill="none" stroke="#72b7cc" stroke-width="12"/>
+        <line id="needle" x1="0" y1="0" x2="0" y2="-40" stroke="#e7ecf3" stroke-width="3" transform="rotate(-90)"/>
+        <circle r="5" fill="#e7ecf3"/></g>
+      <text x="995" y="280" text-anchor="middle" font-family="var(--sans)" font-size="12" fill="#5d6b7e">this year ½ · next year ½</text></g>
+    <g><ellipse cx="220" cy="470" rx="26" ry="10" fill="#22333a"/><rect x="196" y="408" width="48" height="60" rx="9" fill="#2c3f48"/>
+      <text x="220" y="444" text-anchor="middle" font-family="var(--mono)" font-size="13" fill="#b78bc9">RA</text></g>
+    ${person(340,480,1.05,'#72b7cc','#274b59')}
+    <text x="340" y="590" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">ANA</text>
+    ${hotspot(995,120,'?','units','q','READ')}
+    ${hotspot(610,370,'!','valve-h','','TURN')}
+    ${hotspot(220,392,'!','rarel','','RELEASE')}
+  </svg>`);
+  const P=prog('release');
+  let valveDone=!!P.valve, raDone=!!P.ra, unitsRead=(!fresh)||!!P.units;
+  let steps=(valveDone?2:0)+(raDone?2:0);
+  const tank=sc.querySelector('#tank'), beaker=sc.querySelector('#beaker'), tv=sc.querySelector('#tankval');
+  function drain(){
+    const h=11.5*4.6;
+    tank.style.transition=beaker.style.transition='height 1.2s ease, y 1.2s ease';
+    tank.setAttribute('y',380-h);tank.setAttribute('height',h);
+    tv.textContent='11.5';tv.setAttribute('y',330);
+    beaker.setAttribute('y',404-14*4);beaker.setAttribute('height',14*4);
+    const n=sc.querySelector('#needle');
+    if(n)n.animate([{transform:'rotate(-90deg)'},{transform:'rotate(0deg)'}],{duration:1200,fill:'forwards',easing:'ease'});
+  }
+  async function updateObj(){
+    if(fresh)setObjective('Objective: earn year one <b>'+(steps+(unitsRead?1:0))+'/5</b>'+(unitsRead?'':' · <b>READ the dial</b>'));
+    if(valveDone&&raDone&&unitsRead){
+      await talk(sc,[
+        {w:'aud',n:'Auditor · year-one review',t:'“Revenue built from expected claims 3.0, expenses 2.0, RA release 2.5 and CSM release 11.5, 19.0 in all, against 6.0 of service expenses. And not a cent of Ana’s account in any of it. Clean. Now, about the weather upstairs.”'},
+      ]);
+      completeRoom('release');
+      setObjective('Room complete ✓ · the storm attic is unlocked');
+      doorOut(sc);
+    }
+  }
+  bindHotspots(sc,{
+    units:async()=>{await teach('What the dial counts',
+      `<p>Coverage units measure the <strong>quantity of benefits</strong> delivered each period (Appendix A, B119); for a contract with direct participation features the service period covers both insurance coverage and investment-related service (B119A). Two benefit quantities to project here: the <strong>sum at risk</strong> (the 5% excess payable on death) for insurance coverage, and the <strong>account balance under management</strong> for investment-related service.</p>
+       <p>The weighting is an estimate you must be able to show, not a default. Projected here: the account is expected to run near <span class="num">1,100</span> in both years, so the service under management is level, and the sum at risk, 5% of that account, is level with it. Year one ≈ year two on both measures, hence ½ and ½. A contract whose account grows steeply, or whose cover tails off, would earn a very different pattern.</p>`,['Appendix A','B119','B119A']);unitsRead=true;P.units=1;save();updateObj();},
+    'valve-h':async(g)=>{
+      if(g.classList.contains('done'))return;
+      await quiz({kicker:'Coverage units · concept',q:'For this VFA contract, the coverage units reflect the quantity of benefits from…',options:[
+        {t:'Both insurance coverage and investment-related service',ok:true,why:'B119A: a VFA contract provides <strong>insurance coverage</strong> (the excess on death) <em>and</em> <strong>investment-related service</strong> (managing Ana’s account). Units capture both. Under GMM, investment services count only via the separate investment-return-service criteria.'},
+        {t:'Insurance coverage only: CSM is an insurance concept',why:'For VFA contracts B119A explicitly includes the investment-related service. Ignoring it would distort the release pattern.'},
+        {t:'Whatever release pattern smooths profit best',why:'The pattern isn’t a choice, it must reflect the quantity of benefits and expected duration (Appendix A, B119). Smoothing ambitions are how audits get interesting.'}],cite:['45(e)','Appendix A','B119','B119A']},fresh);
+      steps++;updateObj();
+      await quiz({kicker:'Open the valve',q:'CSM before release is 23.0 and this year carries half the total coverage units. Release:',options:[
+        {t:'11.5 to revenue: half of 23.0, leaving CSM 11.5',ok:true,why:'Release = CSM after all adjustments × this period’s units ÷ total units = <span class="num">23.0 × ½ = 11.5</span>. Note the order: market and assumption changes resized the CSM <em>first</em>, then the release is cut from the updated balance.'},
+        {t:'10.0: half of the original 20.0',why:'The release comes off the <em>adjusted</em> balance. The whole point of routing events into the CSM first is that the release reflects everything known now: 11.5.'},
+        {t:'23.0: the year is over, take it',why:'Half the coverage units are still ahead, next year’s account management and death cover. The CSM releases over the service period, not on a good mood.'}],cite:['45(e)','B119']},fresh);
+      steps++;drain();
+      if(fresh)applyDeltas({csm:-11.5,pnl:11.5});
+      g.classList.add('done');valveDone=true;P.valve=1;save();updateObj();
+    },
+    rarel:async(g)=>{
+      if(g.classList.contains('done'))return;
+      await quiz({kicker:'The other jar',q:'The risk adjustment: 5.0 at inception, half the non-financial risk has now expired. The release of 2.5 goes to…',options:[
+        {t:'Insurance revenue: risk expired is service delivered',ok:true,why:'The RA release for expired risk flows into <strong>insurance revenue</strong> (with a policy choice in para 81 about disaggregating its finance part). Year-one revenue: 3.0 + 2.0 + 2.5 + 11.5 = <span class="num">19.0</span>.'},
+        {t:'IFIE: it unwinds like a discount',why:'The unwind of discounting is a finance effect, but the <em>release for expired risk</em> is service, it belongs in revenue.'},
+        {t:'It stays until maturity',why:'The RA compensates for uncertainty <em>while you bear it</em>. Expired risk has been earned; holding it back would understate service delivered.'}],cite:['81']},fresh);
+      steps+=2;
+      if(fresh)applyDeltas({ra:-2.5,pnl:2.5});
+      g.classList.add('done');raDone=true;P.ra=1;save();updateObj();
+    },
+  });
+  if(fresh){
+    const mk=id=>{const g=[...sc.querySelectorAll('.hs')].find(h=>h.dataset.hs===id);if(g)g.classList.add('done');};
+    if(valveDone){drain();mk('valve-h');}
+    if(raDone)mk('rarel');
+    if(P.units)mk('units');
+    if(valveDone||raDone||P.units)updateObj();
+  }
+  if(!fresh){drain();doorOut(sc);}
+}
+
+/* ================= ROOM: STORM ATTIC ================= */
+async function roomStorm(){
+  const fresh=!S.done.storm;
+  const {sc,mount}=sceneShell('storm', fresh?'Objective: survive the onerous year <b>0/3</b>':'Room complete · replay freely');
+  const rain=Array.from({length:34},(_,i)=>{const x=60+ i*34 + (i%3)*9, y=40+(i%5)*18;return `<line x1="${x}" y1="${y}" x2="${x-6}" y2="${y+20}"/>`;}).join('');
+  mount(`<svg viewBox="0 0 1200 640">
+    <rect width="1200" height="640" fill="#120f16"/>
+    <path d="M0,90 L600,10 L1200,90 L1200,640 L0,640 Z" fill="#181420"/>
+    <rect y="470" width="1200" height="170" fill="#201a2b"/>
+    <g><rect x="90" y="120" width="240" height="220" rx="8" fill="#131c2c"/>
+      <rect x="90" y="120" width="240" height="220" rx="8" fill="none" stroke="#0b0f15" stroke-width="6"/>
+      <line x1="210" y1="120" x2="210" y2="340" stroke="#0b0f15" stroke-width="5"/>
+      <g class="rain">${rain}</g>
+      <path d="M150,180 l30,30 m0,-30 l-30,30" stroke="#7fa0c0" stroke-width="0" />
+    </g>
+    <g><rect x="430" y="80" width="560" height="260" rx="8" fill="#0d1017" stroke="#3a2c33"/>
+      <text x="450" y="110" font-family="var(--mono)" font-size="12" letter-spacing="2" fill="#8b6b74">GLOBAL BALANCED FUND · YEAR TWO</text>
+      <line x1="450" y1="300" x2="970" y2="300" stroke="#2c222c"/>
+      <polyline class="drawline" points="450,150 540,144 610,158 680,210 760,262 850,251 970,268" stroke="#e06a5e" stroke-width="3" fill="none"/>
+      <text x="900" y="240" font-family="var(--mono)" font-size="12" fill="#e06a5e">−25%</text>
+      <circle class="lamp-red" cx="960" cy="104" r="8" fill="#e06a5e"/></g>
+    <g id="lcgauge" style="opacity:0"><rect x="1010" y="380" width="120" height="18" rx="9" fill="#241a1e" stroke="#3a2c33"/>
+      <rect id="lcfill" x="1013" y="383" width="0" height="12" rx="6" fill="#e06a5e"/>
+      <text x="1070" y="372" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#e06a5e">LOSS COMPONENT</text>
+      <text id="lcval" x="1070" y="418" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#e8907f"></text></g>
+    ${person(240,485,1.05,'#72b7cc','#274b59')}
+    <text x="240" y="595" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">ANA</text>
+    ${person(880,490,1.05,'#d9a648','#6b5222','avatar')}
+    <text x="880" y="600" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">YOU</text>
+    ${hotspot(210,100,'?','lcnote','q','READ')}
+    ${hotspot(700,360,'!','crash','','DECIDE')}
+  </svg>`);
+  const gauge=sc.querySelector('#lcgauge'), lcfill=sc.querySelector('#lcfill'), lcval=sc.querySelector('#lcval');
+  function setLC(v){
+    gauge.style.transition='opacity .5s';gauge.style.opacity=v>0?1:0;
+    lcfill.style.transition='width .8s ease';lcfill.setAttribute('width',Math.max(0,v)/7*114);
+    lcval.textContent=v>0?fmt(v):'';
+  }
+  const P=prog('storm');
+  let step=P.step||0, lcnoteRead=(!fresh)||!!P.note, crashDone=step>=3;
+  const maybeEnd=()=>{ if(!(crashDone&&lcnoteRead)||S.done.storm)return; completeRoom('storm'); endOverlay(); };
+  bindHotspots(sc,{
+    lcnote:async()=>{await teach('The pinned note: what a loss component is',
+      `<p><strong>1 · The loss is booked once.</strong> The CSM cannot go below zero. When bad news exceeds the CSM, the excess is a loss. That loss goes to P&amp;L immediately (para 47-48). It is not spread over time.</p>
+       <p><strong>2 · The loss component is a memo of that loss.</strong> It sits inside the liability for remaining coverage. It records how much future service the booked loss has already paid for. It is not an extra provision.</p>
+       <p><strong>3 · Good news reverses it first.</strong> A favourable future-service change reduces the loss component before it rebuilds any CSM (para 50(b)). The reversal is a credit in P&amp;L.</p>
+       <p><strong>4 · Later revenue is shown lower. Profit is not hit again.</strong> Each period a slice of the expected claims and expenses belongs to the loss component. That slice is excluded from insurance revenue (para 50(a)). Service expenses receive an equal credit (para 103(b)). The two cancel. The profit effect of this allocation is zero.</p>`,['47–52','103(b)']);lcnoteRead=true;P.note=1;save();maybeEnd();},
+    crash:async(g)=>{
+      if(g.classList.contains('done'))return;
+      if(step===0){
+        await talk(sc,[
+          {w:'ph',n:'Ana Torres',t:'“My account is down. Remind me why I’m paying you fees?”'},
+          {w:'act',n:'Chief actuary · crash memo',t:'“Two changes hit the CSM this year. First: the market fell. The value of our future fees fell with it. Our share of the pool\u2019s fair-value change is <span class="num">−16.5</span>.”'},
+          {w:'act',n:'Chief actuary · crash memo',t:'“Second: we now expect higher claims in the future years. We measure that change at current rates. It is <span class="num">−2.0</span>.”'},
+          {w:'act',n:'Chief actuary · crash memo',t:'“Add them up: <span class="num">−18.5</span> against the CSM. The CSM we opened the year with: <span class="num">11.5</span>. It will not be enough.”'},
+        ]);
+        await quiz({kicker:'The floor',ctx:'<div class="memo"><strong>The storm, year two:</strong> the pool falls 25%. The fulfilment economics move against you by <b>18.5</b> in total: entity share of the fair-value fall 16.5, claims outlook worse 2.0. The CSM stands at <b>11.5</b>.</div>',q:'11.5 − 18.5 = −7.0. What do you book?',options:[
+          {t:'CSM to zero; recognize a 7.0 loss in P&L now; carry a loss component of 7.0',ok:true,why:'The CSM cannot go negative. para 48: once unfavourable changes exhaust it, the excess is a <strong>loss recognized immediately</strong> in the service result, and you set up a <strong>loss component</strong> of the same amount. Note the order inside a period: adjustments come first, the release for the period comes last (para 44-45). This year nothing is left to release, so year-two revenue carries no CSM release at all.'},
+          {t:'Book CSM at −7.0 and let it recover',why:'A negative CSM would be booking future <em>losses</em> as unearned profit. para 48 floors it at zero and puts the 7.0 through P&L today.'},
+          {t:'Spread the 7.0 over the remaining coverage period',why:'Losses are not smoothed under IFRS 17. Onerous means the loss is recognized <em>when identified</em> (para 47–48).'}],cite:['48','47']},fresh);
+        if(fresh)applyDeltas({account:-280,csm:-11.5,lc:7,pnl:-7});
+        setLC(7);step=1;P.step=1;save();
+        if(fresh)setObjective('Objective: survive the onerous year <b>1/3</b>');
+      } else if(step===1){
+        await quiz({kicker:'The bounce',ctx:'<div class="memo"><strong>Where you stand:</strong> the CSM is at zero and a loss component of <b>7.0</b> is open.</div>',q:'Late in the year markets claw back: favourable future-service change of +4.0. Where does it go?',options:[
+          {t:'Reverse the loss component first: LC 7.0 → 3.0, credit 4.0 to P&L',ok:true,why:'While a loss component exists, favourable future-service changes are allocated to it <strong>first</strong> (para 50(b)), presented in insurance service expenses as a <strong>reversal of losses</strong> (para 103(b)). Only after the LC hits zero would gains rebuild the CSM.'},
+          {t:'Rebuild the CSM: 0 → 4.0',why:'Not while a loss component stands. para 50(b) sends favourable changes against the LC first.'},
+          {t:'IFIE: it is a market bounce',why:'It changes the entity’s variable fee, CSM-track under VFA (para 45(b)), and LC-track first while one exists (para 50(b)).'}],cite:['50(b)','103(b)']},fresh);
+        if(fresh)applyDeltas({lc:-4,pnl:4});
+        setLC(3);step=2;P.step=2;save();
+        if(fresh)setObjective('Objective: survive the onerous year <b>2/3</b>');
+      } else {
+        await quiz({kicker:'The presentation trap',q:'While the loss component exists, the period’s allocation of expected claims and expenses attributed to the LC, does it appear in insurance revenue?',options:[
+          {t:'No: excluded from revenue, offset by an equal ISE credit: net zero',ok:true,why:'50(a): amounts allocated to the loss component are <strong>excluded from insurance revenue</strong>, with a matching credit in service expenses (para 103(b)), P&L-neutral by construction. The loss already went through P&L the day the contract turned onerous; revenue must not be re-earned on service the LC pre-paid.'},
+          {t:'Yes: service is service; revenue always shows expected amounts',why:'Not for the onerous slice: that would double-count. para 50(a) excludes it; para 103(b) balances it.'},
+          {t:'Revenue shows it, and the LC pays for it as a debit to equity',why:'Nothing about the LC touches equity directly. Revenue exclusion + ISE credit, net zero (para 50, para 103(b)).'}],cite:['50(a)','103(b)']},fresh);
+        step=3;P.step=3;save();g.classList.add('done');
+        if(fresh)setObjective('Objective: survive the onerous year <b>3/3</b>');
+        sc.querySelector('.rain').style.display='none';
+        await talk(sc,[
+          {w:'sys',t:'The rain thins. Maturity: Ana takes her account, smaller than she hoped, exactly as the contract promised. The payout is an investment component: it never touches revenue (para 85). Two last movements close the books. The remaining risk adjustment of 2.5 releases as year-two risk expires, into insurance revenue and P&L (para 81, B124). And the loss component runs off with the final service: excluded from revenue, offset in service expenses, net nil, because that loss was already booked the day the storm hit (para 50–52).'},
+          {w:'ph',n:'Ana Torres',t:'“Down years included, you told me where every number would go before it went there. All right. Your fee was fair.”'},
+        ]);
+        sc.querySelectorAll('.fig').forEach(f=>f.dataset.state='celebrate');
+        if(fresh){L={...CHECK.storm};renderChips();}
+        crashDone=true;
+        if(!lcnoteRead)setObjective('Objective: <b>READ the pinned note</b> to close the engagement');
+        maybeEnd();
+      }
+    },
+  });
+  if(fresh){
+    const mk=id=>{const g=[...sc.querySelectorAll('.hs')].find(h=>h.dataset.hs===id);if(g)g.classList.add('done');};
+    if(step>=1)setLC(step>=2?3:7);
+    if(step>=3){sc.querySelector('.rain').style.display='none';mk('crash');
+      setObjective('Objective: <b>READ the pinned note</b> to close the engagement');}
+    else if(step>0)setObjective('Objective: survive the onerous year <b>'+step+'/3</b>');
+    if(P.note)mk('lcnote');
+  }
+  if(!fresh){setLC(0);sc.querySelector('.rain').style.display='none';doorOut(sc);}
+}
+
+/* ================= end ================= */
+function endOverlay(){
+  /* the engagement does not close on recall alone: the capstone file comes first */
+  if(!S.capstoneDone){
+    const card=el('div','mcard');
+    card.append(el('div','qk','Engagement almost closed · case mastery '+S.score+'/100'));
+    card.append(el('div','grade','Last thing: the capstone file.'));
+    card.insertAdjacentHTML('beforeend','<p>Six rooms survived. But the rooms tested what they taught, so the auditor slides two contracts across the desk that <strong>no room walked you through</strong>: one with a heavy guarantee, one with a documented hedge. Two calls, 12 mastery each. Then the engagement closes.</p>');
+    const f=el('div','mfoot');
+    const later=el('button','cta ghost','Back to the house');later.onclick=()=>{closeModal();renderMap();};
+    const go=el('button','cta big','Open the capstone file');go.onclick=()=>{closeModal();runCapstones();};
+    f.append(later,go);card.append(f);
+    openModal(card,true);save();return;
+  }
+  const card=el('div','mcard');
+  const grade=S.score>=100?'Full marks. The case is mastered.':S.score>=85?'A strong file, a few findings still open.':S.score>=60?'The shape is there; the audit file shows where to look.':'An honest first pass. The retake desk is open.';
+  card.append(el('div','qk','Engagement closed · case mastery '+S.score+'/100'));
+  card.append(el('div','grade',grade));
+  card.append(el('p','','You classified under B101, priced the variable fee under B104, booked a year of economics through para 45, released by coverage units under B119A, survived an onerous cycle under para 47–52, and made two calls the rooms never rehearsed. The house stays open, every room can be revisited with nothing at stake, and the ⓘ board on the map indexes every paragraph.'));
+  const rules=el('div','rules');
+  ['B101(a)–(c)','B102','B107–B108','B109','B104','38','85','B111','45(b)/B112','45(c)/B113(a)','B113(b)','B115–B118','45(e)/B119/B119A','81','47–48','50–52','103(b)'].forEach(c=>rules.append(el('span','cite',c)));
+  card.append(rules);
+  const R=(!S.drillDue)?retakeList():[];
+  if(R.length)card.insertAdjacentHTML('beforeend','<p class="fy">The auditor offers a retake: answer the '+R.length+' question'+(R.length>1?'s':'')+' you missed, all right in one sitting, then walk through the numbers drill, and the mastery those findings carry, '+R.reduce((t,r)=>t+(r.p||QUESTION_PTS),0)+' points, is earned back.</p>');
+  if(S.drillDue)card.insertAdjacentHTML('beforeend','<p class="fy">Your retake is cleared. One step left: finish the numbers drill, nothing at stake, and the mastery your findings carried comes back.</p>');
+  if(S.score>=100)card.insertAdjacentHTML('beforeend','<p class="fy">Before you go: click any number in the top bar, Pool, RA, CSM or P&amp;L, to see its whole story as a roll-forward and waterfall.</p>');
+  const f=el('div','mfoot');
+  const again=el('button','cta ghost','Play again');
+  again.onclick=()=>{S={done:{},score:0,started:true,progress:{},mistakes:[]};ledgerFromState();renderChips();setAudit();save();closeModal();renderMap();};
+  const map=el('button','cta'+(R.length?'':' big'),'Back to the house');
+  map.onclick=()=>{closeModal();renderMap();};
+  f.append(again,map);
+  if(R.length){const rt=el('button','cta big','Retake what you missed');rt.onclick=()=>{closeModal();runRetake(R);};f.append(rt);}
+  if(S.drillDue){const dd=el('button','cta big','Finish the numbers drill');dd.onclick=()=>{closeModal();runDrill();};f.append(dd);}
+  card.append(f);
+  openModal(card,true);
+  save();
+}
+/* ================= boot ================= */
+document.getElementById('dirBtn').onclick=()=>showDirectory();
+document.getElementById('audit').onclick=()=>showAudit();
+document.getElementById('audit').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showAudit();}};
+document.getElementById('quizBtn').onclick=()=>showQuizLib();
+function restartGame(){
+  S={done:{},score:0,started:true,progress:{},mistakes:[]};
+  save();ledgerFromState();renderChips();setAudit();avatarAt='lobby';closeModal();renderMap();
+}
+document.getElementById('restartBtn').onclick=()=>{
+  const card=el('div','mcard');
+  card.append(el('div','qk','Restart'));
+  card.append(el('h4','','Start the game over?'));
+  card.insertAdjacentHTML('beforeend','<p>All room progress, the ledger and the audit file will reset. Your theme choice stays.</p>');
+  const f=el('div','mfoot');f.style.gap='10px';
+  const c=el('button','cta ghost','Cancel');c.onclick=closeModal;
+  const r=el('button','cta big','Restart');r.onclick=restartGame;
+  f.append(c,r);card.append(f);
+  openModal(card,true);
+};
+const THEME_KEY='vfa-theme';
+function applyTheme(t){
+  if(t==='light')document.documentElement.dataset.theme='light';
+  else delete document.documentElement.dataset.theme;
+  document.getElementById('themeBtn').textContent=t==='light'?'☾ dark':'☀ light';
+}
+let THEME=localStorage.getItem(THEME_KEY)||'dark';
+applyTheme(THEME);
+document.getElementById('themeBtn').onclick=()=>{THEME=THEME==='light'?'dark':'light';try{localStorage.setItem(THEME_KEY,THEME);}catch(e){}applyTheme(THEME);};
+/* one-time phone tip: how to move through wide rooms on a small screen */
+const mtip=document.getElementById('mobiletip');
+if(mtip){
+  const MTIP_KEY='vfa-mobiletip';
+  if(matchMedia('(max-width:740px)').matches&&!localStorage.getItem(MTIP_KEY))mtip.style.display='flex';
+  mtip.querySelector('button').onclick=()=>{mtip.style.display='none';try{localStorage.setItem(MTIP_KEY,'1');}catch(e){}};
+}
+setAudit();renderChips();
+/* a run is only finished once the capstone file is closed too */
+if(S.started&&Object.keys(S.done).length>0&&!(S.done.storm&&S.capstoneDone)){renderMap();}
+else titleScreen();
+</script>
