@@ -123,11 +123,18 @@
   .dlg .who{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--faint);font-weight:600;margin-bottom:3px}
   .dlg p{color:#d5dde8;font-size:14.5px}
   .dlg .num{font-family:var(--mono);color:var(--gold)}
-  .dlg .next{flex:none;align-self:flex-end;border:1px solid #d9a64866;color:var(--gold);border-radius:6px;padding:6px 14px;font-size:12.5px}
-  .dlg .next:hover{background:var(--gold-dim)}
-  /* while a conversation is open, the door button steps aside */
+  .dlg .next{flex:none;align-self:flex-end;border:1px solid #d9a64866;color:var(--gold);border-radius:6px;padding:6px 14px;font-size:12.5px;
+    animation:nextflash 1.2s ease-in-out infinite}
+  .dlg .next:hover{background:var(--gold-dim);animation:none}
+  @keyframes nextflash{0%,100%{background:transparent;box-shadow:none}50%{background:var(--gold-dim);box-shadow:0 0 0 3px #d9a64833}}
+  @media(prefers-reduced-motion:reduce){.dlg .next{animation:none;background:var(--gold-dim)}}
+  /* while a conversation is open, the door button steps aside and the hotspots stop
+     pulsing: the flashing thing on screen is the Next button */
   .scene:has(.dlg) > .cta.big{opacity:0;pointer-events:none}
   .scene > .cta.big{transition:opacity .25s}
+  .scene:has(.dlg) .hs .pulse{display:none}
+  .scene:has(.dlg) .hs.next .ring,.scene:has(.dlg) .hs.next .halo{animation:none}
+  .scene:has(.dlg) .hs.next .halo{opacity:0}
 
   /* hotspots inside svg */
   .hs{cursor:pointer}
@@ -199,9 +206,13 @@
 
   /* map effects */
   .room-g{cursor:pointer}
-  .room-g.locked{cursor:not-allowed}
+  .room-g.locked{cursor:not-allowed;opacity:.55}
   .room-g .glowrect{opacity:0;transition:opacity .3s}
   .room-g:not(.locked):hover .glowrect{opacity:1}
+  /* the room to walk into next flashes its outline — unmissable among the dim ones */
+  .room-g.next .glowrect{animation:roomflash 1.2s ease-in-out infinite}
+  @keyframes roomflash{0%,100%{opacity:.15;stroke-width:2}50%{opacity:1;stroke-width:6}}
+  @media(prefers-reduced-motion:reduce){.room-g.next .glowrect{animation:none;opacity:1;stroke-width:4}}
   .doorglow{animation:doorglow 1.8s ease-in-out infinite}
   @keyframes doorglow{0%,100%{opacity:.25}50%{opacity:.85}}
   .lamp-red{animation:alarmpulse 1.1s ease-in-out infinite}
@@ -247,7 +258,11 @@
   .verdict{margin-top:12px;font-size:13.5px;line-height:1.55;border-radius:8px;padding:10px 13px}
   .verdict.good{background:var(--green-dim);border:1px solid #63b38044;color:#cfe6d6}
   .verdict.bad{background:var(--red-dim);border:1px solid #e06a5e3d;color:#eccfc9}
-  .cite{display:inline-block;font-family:var(--mono);font-size:10.5px;border:1px solid #d9a64855;color:var(--gold);border-radius:4px;padding:1px 7px;margin:6px 6px 0 0}
+  .cite{display:inline-block;font-family:var(--mono);font-size:10.5px;border:1px solid #d9a64855;color:var(--gold);border-radius:4px;padding:1px 7px;margin:6px 6px 0 0;cursor:help}
+  .cite:hover{background:var(--gold-dim)}
+  .cite-pop{position:fixed;z-index:200;max-width:320px;background:var(--gold);color:#131a24;border-radius:8px;
+    padding:9px 13px;font-size:12.5px;line-height:1.5;box-shadow:0 8px 24px #00000066;animation:mup .2s ease}
+  [data-theme="light"] .cite-pop{color:#ffffff}
   .mfoot{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:16px}
   .file-list{list-style:none;margin:10px 0 4px;display:flex;flex-direction:column;gap:6px}
   .file-list li{font-size:13.5px;color:#c3cddb;padding-left:16px;position:relative}
@@ -494,7 +509,8 @@
 /* ================= state ================= */
 const KEY='vfa-house-v2'; /* v2: mastery is earned from zero, capstone cases added */
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const fmt = v => (Math.round(v*10)/10).toLocaleString('en-US',{minimumFractionDigits:(v%1===0?0:1),maximumFractionDigits:1});
+/* Swiss thousands separator: 1’120, matching the audience's convention */
+const fmt = v => {const r=Math.round(v*10)/10;return r.toFixed(r%1===0?0:1).replace(/\B(?=(\d{3})+(?!\d))/g,"’");};
 /* mastery economy: 19 room questions x 4 + 2 capstone cases x 12 = 100 */
 const QUESTION_PTS=4, CAPSTONE_PTS=12;
 let S={done:{},score:0,started:false};
@@ -576,14 +592,43 @@ function setAudit(){
 }
 /* mastery is earned, never taken away: a first-try answer banks its points, a miss
    banks nothing and files a finding whose points come back through the retake */
-function award(pts){ S.score=Math.min(100,S.score+(pts||QUESTION_PTS)); setAudit(); save(); }
-function penalty(active){ if(!active)return; save(); }
+function award(pts){ S.score=Math.min(100,S.score+(pts||QUESTION_PTS)); setAudit(); save(); showMasteryCallout(); }
+function penalty(active){ if(!active)return; save(); showMasteryCallout(); }
+/* one-time callout after the very first scored answer: what the mastery bar is
+   and how its points are collected (mirrors the books callout on the ledger) */
+let MASTERY_CO_PENDING=false;
+function showMasteryCallout(){
+  if(S.seenMastery||MASTERY_CO_PENDING)return;
+  MASTERY_CO_PENDING=true;
+  const attempt=()=>{
+    /* wait for the quiz card to close, so the callout is not buried under it */
+    if(mroot.classList.contains('open')){setTimeout(attempt,700);return;}
+    MASTERY_CO_PENDING=false;
+    if(S.seenMastery)return;
+    S.seenMastery=1;save();
+    const a=document.getElementById('audit'), hud=document.getElementById('hud');
+    if(!a||!hud)return;
+    const c=el('div','books-callout','<button class="bc-x" aria-label="Dismiss">×</button><b>That answer just counted, up here.</b>The mastery bar collects points across the whole case: a room question answered right on the first try banks 4, each capstone case at the end banks 12, and a full run is 100. A miss banks nothing but files a finding instead; clear the retake later and those points come back. Click the bar anytime to open your audit file.');
+    hud.append(c);
+    const center=a.offsetLeft+a.offsetWidth/2;
+    c.style.right=Math.max(8,hud.clientWidth-center-52)+'px';
+    const kill=()=>c.remove();
+    c.onclick=kill;
+    setTimeout(kill,18000);
+  };
+  setTimeout(attempt,700);
+}
 function setWhere(t){document.getElementById('whereLabel').textContent=t;}
 
 /* ================= modal system ================= */
 const mroot=document.getElementById('modal-root'), mwrap=document.getElementById('mwrap');
 let MODAL_LASTFOCUS=null;
-function openModal(node,closable){
+/* whoever opened the modal can leave a callback here; closeModal fires it exactly
+   once, no matter which path closed the card (button, ×, backdrop, Escape) */
+let MODAL_ONCLOSE=null;
+function openModal(node,closable,onClose){
+  if(MODAL_ONCLOSE){const cb=MODAL_ONCLOSE;MODAL_ONCLOSE=null;cb();}
+  MODAL_ONCLOSE=onClose||null;
   mwrap.innerHTML='';
   if(document.activeElement&&document.activeElement!==document.body)MODAL_LASTFOCUS=document.activeElement;
   const holder=document.createElement('div');holder.className='mcard-holder';
@@ -605,8 +650,35 @@ function closeModal(){
   mroot.classList.remove('open');mwrap.innerHTML='';mroot.onkeydown=null;
   if(MODAL_LASTFOCUS&&MODAL_LASTFOCUS.isConnected){try{MODAL_LASTFOCUS.focus({preventScroll:true});}catch(e){}}
   MODAL_LASTFOCUS=null;
+  if(MODAL_ONCLOSE){const cb=MODAL_ONCLOSE;MODAL_ONCLOSE=null;cb();}
 }
 const el=(t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+
+/* ---------- citation chips: references into IFRS 17 ---------- */
+function citeLabel(c){ return c.startsWith('Appendix')?'IFRS 17 '+c:'IFRS 17.'+c; }
+function citeTitle(c){
+  if(c.startsWith('Appendix A'))return 'IFRS 17, Appendix A: the defined terms of the standard.';
+  if(c.startsWith('Appendix'))return 'IFRS 17, '+c+'.';
+  if(c.includes('/')){const[p,b]=c.split('/');
+    return 'IFRS 17: paragraph '+p+' of the standard, with its application guidance in paragraph '+b+' of Appendix B.';}
+  if(c[0]==='B')return 'IFRS 17, paragraph '+c+' in Appendix B, the application guidance. Letters in brackets are subparagraphs.';
+  return 'IFRS 17, paragraph '+c+' of the standard. Letters in brackets are subparagraphs.';
+}
+function citeChip(c){return `<span class="cite" role="button" tabindex="0" data-ref="${c}" title="${citeTitle(c)}">${citeLabel(c)}</span>`;}
+/* clicking a chip pops a small written-out explanation of the reference */
+function showCitePop(t){
+  document.querySelectorAll('.cite-pop').forEach(p=>p.remove());
+  if(!t||!t.dataset.ref)return;
+  const pop=el('div','cite-pop',citeTitle(t.dataset.ref));
+  document.body.append(pop);
+  const r=t.getBoundingClientRect();
+  pop.style.left=Math.max(10,Math.min(window.innerWidth-pop.offsetWidth-10,r.left))+'px';
+  pop.style.top=Math.min(window.innerHeight-pop.offsetHeight-10,r.bottom+8)+'px';
+  setTimeout(()=>pop.remove(),7000);
+}
+document.addEventListener('click',e=>{const t=e.target.closest('.cite');
+  if(!t){document.querySelectorAll('.cite-pop').forEach(p=>p.remove());return;} showCitePop(t);});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.closest&&e.target.closest('.cite')){e.preventDefault();showCitePop(e.target.closest('.cite'));}});
 
 function teach(title,html,cites){
   return new Promise(res=>{
@@ -614,30 +686,32 @@ function teach(title,html,cites){
     card.append(el('div','qk','Teaching point'));
     card.append(el('h4','',title));
     card.insertAdjacentHTML('beforeend',html);
-    if(cites)card.append(el('div','',cites.map(c=>`<span class="cite">${c}</span>`).join('')));
+    if(cites)card.append(el('div','',cites.map(citeChip).join('')));
     const f=el('div','mfoot');const b=el('button','cta','Got it');
-    b.onclick=()=>{closeModal();res();};f.append(b);card.append(f);
-    openModal(card,true);
-    mroot.querySelector('.mback').onclick=()=>{closeModal();res();};
-    card.parentElement && null;
+    b.onclick=()=>closeModal();f.append(b);card.append(f);
+    /* every close path (button, ×, backdrop, Escape) resolves via the modal's
+       onClose hook, so an abandoned card can never leave the room locked */
+    openModal(card,true,res);
   });
 }
 function showDirectory(){
   return teach('Building directory: the paragraphs that run this house',
     `<p><strong>Reception</strong>: what a direct-participation contract is (B101).<br>
-     <strong>Underwriting</strong>: the three-part eligibility test, assessed at inception with no bright lines (B101, B102, B107–B108), and the reinsurance exclusion (B109).<br>
-     <strong>Actuarial studio</strong>: variable fee &amp; day-one CSM, with the RA netted inside the fulfilment cash flows (B104, para 38), investment components (para 85).<br>
-     <strong>Market room</strong>: routing: policyholder share to IFIE (B111), entity share to CSM (para 45(b)/B112), future-service changes to CSM at current rates (para 45(c)/B113), experience to P&amp;L, and the documented risk-mitigation exception (B115–B118).<br>
-     <strong>Release desk</strong>: coverage units incl. investment service (para 45(e), Appendix A, B119, B119A), RA release (para 81).<br>
-     <strong>Storm attic</strong>: onerous contracts and the loss component (para 47–48, para 50–52, para 103(b)).</p>
+     <strong>Underwriting</strong>: the three-part eligibility test, assessed at inception with no fixed percentage thresholds (B101, B102, B107–B108), and the reinsurance exclusion (B109).<br>
+     <strong>Actuarial studio</strong>: variable fee &amp; day-one CSM, with the RA netted inside the fulfilment cash flows (B104, paragraph 38), investment components (paragraph 85).<br>
+     <strong>Market room</strong>: routing: policyholder share to IFIE (B111), entity share to CSM (paragraph 45(b)/B112), future-service changes to CSM at current rates (paragraph 45(c)/B113), experience to P&amp;L, and the documented risk-mitigation exception (B115–B118).<br>
+     <strong>Release desk</strong>: coverage units incl. investment service (paragraph 45(e), Appendix A, B119, B119A), RA release (paragraph 81).<br>
+     <strong>Storm attic</strong>: onerous contracts and the loss component (paragraph 47–48, paragraph 50–52, paragraph 103(b)).</p>
      <hr style="border:none;border-top:1px solid #2c394a;margin:14px 0">
-     <p><strong>Assumptions of this house.</strong> The numbers are a teaching simplification of IFRS 17 (as issued; jurisdictional adoptions such as AASB 17 are word-identical here). One contract stands in for a group of contracts. Two annual periods, no discounting shown separately, and the time value of money is folded into the fair-value movements. Fees are 20% of returns; Ana's account is credited 80% of returns. The RA releases evenly over the two years, and its whole movement is shown in the service result (the para 81 disaggregation choice is not taken). No OCI option is used. Out of scope: the premium allocation approach, transition, reinsurance measurement, and disclosure requirements.</p>`);
+     <p><strong>How to read the references.</strong> The gold tags in this house point to where each rule lives in the IFRS 17 standard. A plain number is a paragraph of the standard itself (paragraph 85). A number starting with B is a paragraph of Appendix B, the standard’s application guidance (paragraph B104). Appendix A holds the defined terms. Letters in brackets, as in B101(a), are subparagraphs. Click any tag for its written-out reference.</p>
+     <hr style="border:none;border-top:1px solid #2c394a;margin:14px 0">
+     <p><strong>Assumptions of this house.</strong> The numbers are a teaching simplification of IFRS 17 (as issued; jurisdictional adoptions such as AASB 17 are word-identical here). One contract stands in for a group of contracts. Two annual periods, no discounting shown separately, and the time value of money is folded into the fair-value movements. Fees are 20% of returns; Ana's account is credited 80% of returns. The RA releases evenly over the two years, and its whole movement is shown in the service result (the paragraph 81 disaggregation choice is not taken). No OCI option is used. Out of scope: the premium allocation approach, transition, reinsurance measurement, and disclosure requirements.</p>`);
 }
 function ledgerHistory(){
   const H=[]; const p=S.progress||{};
   const add=(room,label,d)=>H.push({room,label,d});
   if(S.done.studio||(p.studio&&p.studio.paid)){
-    add('Studio','Premium of 1,000 into the fund pool',{account:1000});
+    add('Studio','Premium of 1’000 into the fund pool',{account:1000});
     add('Studio','Risk adjustment set up at inception',{ra:5});
     add('Studio','Day-one CSM: the variable fee of 20 (35 − 10 − 5)',{csm:20});}
   const wires=S.done.market?5:(p.market?(p.market.doneN||0):0);
@@ -664,7 +738,7 @@ function showComponent(k){
   const card=el('div','mcard');
   card.append(el('div','qk','Roll-forward'));
   card.append(el('h4','',COMP_NAMES[k]+' · now '+fmt(L[k])));
-  if(k==='account')card.insertAdjacentHTML('beforeend','<p class="fy">This chip is the gross fund pool. Ana’s account is her contractual share of it; the rest is the entity’s accrued fee share. The year-one bridge: pool 1,120 = her account 1,096 + fee share 24.</p>');
+  if(k==='account')card.insertAdjacentHTML('beforeend','<p class="fy">This chip is the gross fund pool. Ana’s account is her contractual share of it; the rest is the entity’s accrued fee share. The year-one bridge: pool 1’120 = her account 1’096 + fee share 24.</p>');
   if(!H.length){card.insertAdjacentHTML('beforeend','<p>Nothing has been booked here yet. Play on and come back.</p>');}
   else{
     let bal=0;
@@ -711,7 +785,7 @@ function showAudit(){
 }
 /* ================= quiz library / retake ================= */
 const NUMQ=[
- {kicker:'The numbers',q:'Day one: the premium of 1,000 goes into the pool. Entity share of the pool 35, non-varying claims and expenses 10, risk adjustment 5. The B104 variable fee, and with it the day-one CSM?',options:[
+ {kicker:'The numbers',q:'Day one: the premium of 1’000 goes into the pool. Entity share of the pool 35, non-varying claims and expenses 10, risk adjustment 5. The B104 variable fee, and with it the day-one CSM?',options:[
    {t:'20.0',ok:true,why:'B104 nets the fulfilment cash flows that do not vary with the pool off the entity’s share, and the fulfilment cash flows include the risk adjustment: 35 − 10 − 5 = 20. With nothing else at inception, the CSM equals the variable fee, and nothing hits P&L on day one.'},
    {t:'25.0',why:'That is 35 − 10 only. The fulfilment cash flows include the risk adjustment, so the 5 is netted inside the variable fee too: 20.'},
    {t:'30.0',why:'That is 35 − 5 only. The non-varying claims and expenses of 10 come off as well: 35 − 10 − 5 = 20.'}],cite:['38','B104']},
@@ -722,7 +796,7 @@ const NUMQ=[
  {kicker:'The numbers',q:'Release: coverage units say half the total service was delivered in year one. The CSM stands at 23.0. How much releases to revenue?',options:[
    {t:'11.5',ok:true,why:'23.0 times one half is 11.5. The CSM releases in line with coverage units, insurance plus investment service.'},
    {t:'23.0',why:'That would earn everything now, with a full year of service still to come.'},
-   {t:'2.5',why:'2.5 is the risk-adjustment release under para 81. The CSM has its own release, by coverage units.'}],cite:['45(e)','B119A','81']},
+   {t:'2.5',why:'2.5 is the risk-adjustment release under paragraph 81. The CSM has its own release, by coverage units.'}],cite:['45(e)','B119A','81']},
  {kicker:'The numbers',q:'Year one P&L: the CSM releases 11.5, the RA releases 2.5, and claims came in 1.0 worse than expected. What is the year-one result?',options:[
    {t:'13.0',ok:true,why:'11.5 plus 2.5 less the 1.0 claims miss gives 13.0. That matches the P&L chip in the header after the release desk.'},
    {t:'14.0',why:'You forgot the claims miss. Actual claims ran 1.0 over expected and that lands in the current year.'},
@@ -762,7 +836,7 @@ function examQuiz(o,idx,total,drill){
         if(op.ok){
           b.classList.add('right');
           card.append(el('div','verdict good','<strong>Correct.</strong> '+(op.why||'')
-            +(o.cite?'<div>'+o.cite.map(c=>`<span class="cite">${c}</span>`).join('')+'</div>':'')));
+            +(o.cite?'<div>'+o.cite.map(citeChip).join('')+'</div>':'')));
           const f=el('div','mfoot');const c=el('button','cta big',idx<total?'Next question':'Finish');
           c.onclick=()=>{closeModal();res(true);};f.append(c);card.append(f);
           c.scrollIntoView({block:'nearest'});
@@ -880,14 +954,14 @@ function showQuizLib(){
    Each is a scored quiz worth CAPSTONE_PTS; a miss files a finding like any other. */
 const CAPSTONES=[
  {pts:CAPSTONE_PTS,kicker:'Capstone case 1 · the guarantee',
-  ctx:'<div class="memo"><strong>Capstone file A · GuaranSave 95</strong><br>Premium 1,000 buys units in the <b>Harbour Bond Fund</b>, named in the contract · account credited <b>90%</b> of the fund’s returns · at maturity the policyholder receives the <b>higher of the account and a guaranteed 1,050</b> · in the entity’s inception-date stochastic projection the guarantee bites in about <b>half of the probability-weighted scenarios</b>, and where it bites the payment does not move with the fund at all</div>',
+  ctx:'<div class="memo"><strong>Capstone file A · GuaranSave 95</strong><br>A premium of 1’000 buys units in the <b>Harbour Bond Fund</b>, named in the contract. The account is credited <b>90%</b> of the fund’s returns. At maturity the policyholder receives the <b>higher of the account and a guaranteed 1’050</b>. In the entity’s inception-date stochastic projection the guarantee bites in about <b>half of the probability-weighted scenarios</b>, and where it bites the payment does not move with the fund at all.</div>',
   q:'GuaranSave 95: which measurement model?',options:[
    {t:'GMM: on the B107 assessment, condition (c) fails',ok:true,why:'The pool is identified (a), and 90% looks on its face like a substantial share (b). But condition (c) asks whether a <strong>substantial proportion of the changes in the amounts paid vary with the fair value of the pool</strong>, assessed over the contract’s duration on a present-value, probability-weighted basis (B107–B108). Here the guarantee freezes the payment in about half the weighted scenarios, so the expected variability is not substantial: the contract fails (c) and is measured under the general model, with the guarantee inside the fulfilment cash flows. Same brochure feel as UnitLife, opposite classification: that is why the test is an assessment, not a label.'},
    {t:'VFA: an identified pool plus a 90% share is comfortably direct participation',why:'That is label-reading, not assessment. The 90% crediting only matters in the scenarios where the account is what actually gets paid. With the guarantee expected to bite in half the probability-weighted scenarios, payments stop varying with the pool in exactly the scenarios that carry half the weight (B107).'},
    {t:'VFA in the scenarios where the guarantee stays out of the money, GMM in the rest',why:'Classification is one whole-contract call, made once at inception on probability-weighted expectations (B102, B107). A contract does not switch models scenario by scenario, or year by year.'}],
   cite:['B101(c)','B107–B108','B102']},
  {pts:CAPSTONE_PTS,kicker:'Capstone case 2 · the hedge',
-  ctx:'<div class="memo"><strong>Capstone file B · the CFO’s swaps</strong><br>Mutual &amp; Torres’ VFA book carries promises that do not vary with the pool, and falling rates raise their PV at the fee’s expense · the CFO buys <b>interest-rate swaps</b> against that risk · the <b>risk-management objective and strategy were documented before hedging began</b>, meeting B116 · this year rates fall: the swaps gain <b>+3.0</b> and the financial-risk change on the non-varying fulfilment cash flows is <b>−3.0</b></div>',
+  ctx:'<div class="memo"><strong>Capstone file B · the CFO’s swaps</strong><br>Mutual &amp; Torres’ VFA book carries promises that do not vary with the pool, and falling interest rates raise their present value at the fee’s expense. The CFO buys <b>interest-rate swaps</b> against that risk. The <b>risk-management objective and strategy were documented before hedging began</b>, meeting B116. This year rates fall: the swaps gain <b>+3.0</b> and the financial-risk change on the non-varying fulfilment cash flows is <b>−3.0</b>.</div>',
   q:'Under the VFA, where may the −3.0 financial-risk change go?',options:[
    {t:'P&L (or IFIE), by the documented risk-mitigation choice, meeting the swap gains there',ok:true,why:'B113(b) would send the −3.0 into the CSM, but B115 provides the exception: with the B116 documentation in place, the entity <strong>may choose not to adjust the CSM</strong> for the financial-risk changes the swaps mitigate, recognizing them in profit or loss (or insurance finance income/expense) instead. There the −3.0 meets the +3.0 on the swaps and the books show the hedge doing its job, rather than a one-sided gain in P&L against a quiet CSM. The choice applies prospectively, and stops if the conditions lapse (B117–B118).'},
    {t:'CSM: B113(b) is absolute under the VFA',why:'B113(b) is the rule and B115–B118 the documented exception. With the B116 conditions met, forcing the −3.0 into the CSM while the swap gain of +3.0 sits in P&L would show accounting noise where the economics show a working hedge.'},
@@ -898,8 +972,8 @@ async function runCapstones(){
   await new Promise(res=>{
     const card=el('div','mcard');
     card.append(el('div','qk','The capstone file'));
-    card.append(el('h4','','Two contracts no room taught'));
-    card.insertAdjacentHTML('beforeend','<p>The rooms tested what they showed you. These two cases test whether the rules travel: a contract with a heavy guarantee, and a hedge against the fee’s financial risk. A right first call earns <strong>12 mastery</strong> each; a miss files a finding like any other, retakable later. Take your time with the memos.</p>');
+    card.append(el('h4','','The final two cases'));
+    card.insertAdjacentHTML('beforeend','<p>The rooms tested what you had just learned. These final two cases test whether you can apply the same rules to something new: a contract with a substantial guarantee and a hedge against the financial risk in the fee. Get each one right on your first attempt to earn <strong>12 mastery points</strong>. Get it wrong and a finding is recorded, just like before, with another attempt available later. Take your time with the memos.</p>');
     const f=el('div','mfoot');const b=el('button','cta big','Open case 1');b.onclick=()=>{closeModal();res();};f.append(b);card.append(f);
     openModal(card,false);
   });
@@ -916,7 +990,8 @@ function quiz(o, scoring){
     let missed=false;
     const card=el('div','mcard');
     card.append(el('div','qk',o.kicker||'Your call'));
-    if(o.intro)card.insertAdjacentHTML('beforeend',o.intro);
+    const pre=o.intro||o.ctx; /* the case memo stays on the question page, so the reader can re-check the facts */
+    if(pre)card.insertAdjacentHTML('beforeend',pre);
     card.append(el('div','q',o.q));
     const opts=el('div','opts'); const keys='ABCD';
     const shuffled=o.options.map((op,i)=>({op,r:(Math.sin(i*9301+o.q.length*49297)*233280)%1}))
@@ -930,7 +1005,7 @@ function quiz(o, scoring){
           b.classList.add('right');
           if(scoring&&!missed&&typeof award==='function')award(o.pts);
           const v=el('div','verdict good','<strong>Correct.</strong> '+op.why
-            +(o.cite?'<div>'+o.cite.map(c=>`<span class="cite">${c}</span>`).join('')+'</div>':''));
+            +(o.cite?'<div>'+o.cite.map(citeChip).join('')+'</div>':''));
           card.append(v);
           const f=el('div','mfoot');const c=el('button','cta big',o.continueLabel||'Continue');
           c.onclick=()=>{closeModal();res();};f.append(c);card.append(f);
@@ -970,6 +1045,8 @@ function talk(sceneEl,lines){
       const n=el('button','next',i<lines.length-1?'Next':'Done');
       n.onclick=()=>{i++;if(i<lines.length)show();else{bar.remove();sceneEl.querySelectorAll('.fig').forEach(f=>f.dataset.state='idle');res();}};
       bar.append(n);
+      /* a click anywhere on the bar advances too — the conversation never traps anyone */
+      bar.onclick=e=>{if(!e.target.closest('.next'))n.click();};
     };
     show();
   });
@@ -1037,7 +1114,9 @@ function wallWindow(x,y,w,h,sky){
 
 /* ================= stage / router ================= */
 const stage=document.getElementById('stage');
-function clearStage(){stage.innerHTML='';}
+/* rebuilding the stage always releases the hotspot lock: a handler whose scene
+   was torn down mid-await (walked out during a dialogue) must not freeze the next room */
+function clearStage(){stage.innerHTML='';HS_BUSY=false;}
 function sceneShell(roomId,objectiveHTML){
   clearStage();
   const wrap=el('div','fadein');
@@ -1129,7 +1208,7 @@ function roomBox(id,x,y,label,icon,state){
   const w=330,h=170;
   const dim = state==='locked';
   const aria=label+(state==='locked'?', locked':state==='done'?', complete':state==='next'?', your next room':'');
-  return `<g class="room-g ${dim?'locked':''}" data-room="${id}" tabindex="0" role="button" aria-label="${aria}"${dim?' aria-disabled="true"':''}>
+  return `<g class="room-g ${dim?'locked':''}${state==='next'?' next':''}" data-room="${id}" tabindex="0" role="button" aria-label="${aria}"${dim?' aria-disabled="true"':''}>
     <rect class="glowrect" x="${x-4}" y="${y-4}" width="${w+8}" height="${h+8}" rx="12" fill="none" stroke="var(--gold)" stroke-width="2" opacity="0"/>
     <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${dim?'#121924':'#1a2432'}" stroke="#2c394a"/>
     ${icon(x,y,w,h,dim)}
@@ -1322,7 +1401,7 @@ async function roomLobby(){
     <text x="720" y="498" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">ANA</text>
     ${person(608,386,1.1,'#d9a648','#6b5222','avatar')}
     <text x="608" y="498" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">YOU</text>
-    <g transform="translate(742,338)"><g class="thought"><circle cx="-8" cy="-4" r="2.5" fill="#e9eef5"/><circle cx="-2.5" cy="-12" r="3.5" fill="#e9eef5"/><rect x="-108" y="-98" width="188" height="70" rx="17" fill="#e9eef5"/><text x="-14" y="-76" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="500" fill="#131a24">How do I put my 1,000</text><text x="-14" y="-58" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="500" fill="#131a24">into insurance that also</text><text x="-14" y="-40" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="500" fill="#131a24">invests in the market?</text></g></g>
+    <g transform="translate(742,338)"><g class="thought"><circle cx="-8" cy="-4" r="2.5" fill="#e9eef5"/><circle cx="-2.5" cy="-12" r="3.5" fill="#e9eef5"/><rect x="-108" y="-98" width="188" height="70" rx="17" fill="#e9eef5"/><text x="-14" y="-76" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="500" fill="#131a24">How do I put my 1’000</text><text x="-14" y="-58" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="500" fill="#131a24">into insurance that also</text><text x="-14" y="-40" text-anchor="middle" font-family="var(--sans)" font-size="14" font-weight="500" fill="#131a24">invests in the market?</text></g></g>
     <g><ellipse cx="1090" cy="475" rx="30" ry="8" fill="#1b2431"/>
       <path d="M1090,472 q-14,-52 8,-76 M1090,472 q16,-40 -4,-68 M1090,472 q-2,-60 20,-60" stroke="#3f6b52" stroke-width="5" fill="none"/>
       <rect x="1068" y="472" width="44" height="34" rx="6" fill="#2c394a"/></g>
@@ -1351,8 +1430,8 @@ async function roomLobby(){
     ana:async(g)=>{
       await talk(sc,[
         {w:'sys',t:'The doors sigh open and the two of you cross the lobby together: Ana, a client with the stride of someone who reads footnotes, and you, the Mutual &amp; Torres representative on her case.'},
-        {w:'ph',n:'Ana Silva · client',t:'“I have 1,000 to invest. I want it in a real fund I can see, moving with the market, and I want life cover on top. What I don’t want is a black box.”'},
-        {w:'act',n:'Receptionist',t:'“Then you want the underwriting office, first door on the right. They decide what kind of contract this is, and which accounting model it lives under.”'},
+        {w:'ph',n:'Ana Silva · client',t:'“I have 1’000 to invest. I want it in a real fund I can see, moving with the market, and I want life cover on top. What I don’t want is a black box.”'},
+        {w:'act',n:'Receptionist',t:'“Then you want the underwriting office, first door on the right. They decide what kind of contract this is, and which accounting model applies.”'},
         {w:'ph',n:'Ana Silva',t:'“Accounting model? I just want my fund.”'},
         {w:'you',n:'You · Mutual & Torres',t:'“OK, I’ll take it from here. Underwriting first, then up through the house — and I’ll show you where every number goes before it goes there.”'},
         {w:'sys',t:'The accounting model, as you are about to learn, is decided by exactly what Ana just asked for.'},
@@ -1384,13 +1463,13 @@ const FILES={
       {kicker:'Classification call',q:'UnitLife Saver: which measurement model?',options:[
         {t:'VFA: all three B101 conditions hold on assessment',ok:true,why:'The fund is <strong>clearly identified in the contract</strong> (a); Ana is expected to receive a substantial share of its fair-value returns (b); and what she is paid is expected to move nearly one-for-one with the fund’s fair value (c). Conditions (b) and (c) are <strong>assessed, not read off a label</strong>: over the contract’s whole duration, on a present-value, probability-weighted basis, including what the guarantee does in bad scenarios (B107–B108). Here the assessment passes. The 20%-of-returns fee is the <em>variable fee</em> you will price upstairs.'},
         {t:'GMM: there is a guaranteed death benefit, so it can’t be VFA',why:'A guarantee doesn’t automatically disqualify a contract, but it isn’t ignored either: B107’s probability-weighted assessment includes the scenarios where the guarantee bites. A heavy guarantee can erode variability until (c) fails. This 5% excess on top of the account leaves all three conditions intact.'},
-        {t:'GMM: the entity keeps part of the returns, so the share isn’t substantial',why:'“Substantial” doesn’t mean “all”, and B107 sets <strong>no bright-line percentage</strong>. You assess the share over the contract’s duration on a present-value, probability-weighted basis. On that assessment Ana’s 80% passes here, but it passes on the assessment, not because 80 is a magic number. The entity keeping a fee is exactly what makes it a <em>variable-fee</em> contract.'}],cite:['B101(a)–(c)','B107–B108']},
+        {t:'GMM: the entity keeps part of the returns, so the share isn’t substantial',why:'“Substantial” doesn’t mean “all”, and the standard <strong>never says what percentage is enough</strong> (B107). Instead you assess the share over the contract’s duration on a present-value, probability-weighted basis. On that assessment Ana’s 80% passes here, but it passes on the assessment, not because 80 is a magic number. The entity keeping a fee is exactly what makes it a <em>variable-fee</em> contract.'}],cite:['B101(a)–(c)','B107–B108']},
       {kicker:'Follow-up',q:'When do you perform this B101 assessment?',options:[
         {t:'At inception only: not revisited as markets move',ok:true,why:'Eligibility is assessed <strong>once, at inception</strong>, using expectations over the contract’s life. A bad year for the fund later does not reclassify the contract (only a modification could).'},
         {t:'At every reporting date',why:'That would make classification flip with markets. B102 fixes the assessment at inception.'},
         {t:'Whenever actual returns deviate from expectations',why:'Deviations are experience, not classification. The inception-date expectation is what counts (B102).'}],cite:['B102']}]},
   f2:{tag:'FILE 02 · TRADITIONAL',title:'SteadyGrowth 4%',
-    why:'Why it is on the desk: a lookalike sold with the same brochure language. Read the terms; it shows what fails the test.',items:[
+    why:'Why it is on the desk: a product with features that look like participation. Read the terms to see what fails the test.',items:[
       'Premium goes into the entity’s <strong>general account</strong>',
       'Contract credits a <strong>fixed 4% per year</strong>, whatever markets do',
       'No asset pool is named anywhere in the contract'],
@@ -1443,7 +1522,7 @@ async function roomUnderwriting(){
   const P=prog('underwriting');
   if(fresh&&!P.intro){
     await talk(sc,[
-      {w:'sys',t:'The underwriting office. Every contract in the house starts here, with one question: which measurement model does it live under?'},
+      {w:'sys',t:'The underwriting office. Every contract in the house starts here, with one question: which measurement model applies?'},
       {w:'uw',n:'Underwriter',t:'“You make the classification calls today. Three files on the desk. File 01 is the product Ana just asked for at reception. The other two sharpen your eye: a lookalike from the old shelf, and a question the reinsurance desk keeps asking.”'},
       {w:'uw',n:'Underwriter',t:'“The test is on the wall. B101: an identified pool, a substantial share, payments that vary with it. All three, or it is not VFA. Open each file and make the call.”'},
     ]);
@@ -1484,7 +1563,7 @@ async function roomUnderwriting(){
   bindHotspots(sc,{
     poster:async()=>{await teach('Why “all three”?',
       `<p>The VFA exists for contracts that are, in substance, <strong>investment management with insurance wrapped around it</strong>. The three B101 conditions are how the standard checks that substance: an identified pool (a), a genuine share of it (b), and real variability (c). If the entity merely invests premiums for its own account, however prudently, the policyholder isn’t participating.</p>
-       <p>Two footnotes to the slogan on the wall. “Substantial” has <strong>no bright-line percentage</strong>: (b) and (c) are assessed over the contract’s duration on a present-value, probability-weighted basis (B107–B108). And a contract that fails the test lands in the <strong>general model, or the simpler premium allocation approach if it qualifies</strong> (para 53), so “not VFA” does not always mean full GMM machinery.</p>`,['B101','B107–B108','53']);posterRead=true;P.poster=1;save();maybeDone();if(fresh&&!S.done.underwriting)setObjective('Objective: files <b>'+Object.keys(doneFiles).length+'/3</b> · <b>✓ poster</b>');},
+       <p>Two footnotes to the slogan on the wall. The standard <strong>never says what percentage counts as “substantial”</strong> — there is no threshold to look up. Instead, (b) and (c) are assessed over the contract’s duration on a present-value, probability-weighted basis (B107–B108). And a contract that fails the test lands in the <strong>general model, or the simpler premium allocation approach if it qualifies</strong> (paragraph 53), so “not VFA” does not always mean full GMM machinery.</p>`,['B101','B107–B108','53']);posterRead=true;P.poster=1;save();maybeDone();if(fresh&&!S.done.underwriting)setObjective('Objective: files <b>'+Object.keys(doneFiles).length+'/3</b> · <b>✓ poster</b>');},
     f1:openFile('f1'), f2:openFile('f2'), f3:openFile('f3'),
   });
   if(fresh){
@@ -1557,7 +1636,7 @@ async function roomStudio(){
     if(boardStep>=3&&premiumDone&&rajarRead){
       if(fresh&&!P.paid){applyDeltas({account:1000,ra:5,csm:20});P.paid=1;save();}
       await talk(sc,[
-        {w:'act',n:'Chief actuary',t:'“Booked: pool 1,000, today all of it Ana’s account, risk adjustment 5, CSM 20, and not a cent of profit on day one. That 20 is a promise to earn, not a boast. Upstairs, the market decides how the promise ages.”'},
+        {w:'act',n:'Chief actuary',t:'“Booked: pool 1’000, today all of it Ana’s account, risk adjustment 5, CSM 20, and not a cent of profit on day one. That 20 is a promise to earn, not a boast. Upstairs, the market decides how the promise ages.”'},
       ]);
       completeRoom('studio');renderChips();
       setObjective('Room complete ✓ · the market room is unlocked');
@@ -1570,12 +1649,12 @@ async function roomStudio(){
     premium:async(g)=>{
       if(g.classList.contains('done'))return;
       await talk(sc,[
-        {w:'ph',n:'Ana Silva',t:'“Here’s the 1,000. Before you take it upstairs, does my premium count as your revenue now?”'},
+        {w:'ph',n:'Ana Silva',t:'“Here’s the 1’000. Before you take it upstairs, does my premium count as your revenue now?”'},
       ]);
-      await quiz({kicker:'Presentation check',q:'The 1,000 premium: how much of it is insurance revenue?',options:[
-        {t:'None of it: receiving cash is not service',ok:true,why:'No revenue arises when the premium is received; the cash lands on the balance sheet. And the <strong>account balance</strong>, the amount repayable to Ana in all circumstances, is an <strong>investment component</strong> that para 85 keeps out of insurance revenue and expenses, forever. IFRS 17 revenue is earned from service, not collected from premiums.'},
-        {t:'All 1,000: premiums are revenue',why:'That was IFRS 4. Under IFRS 17 the premium lands on the balance sheet; revenue is earned over time, and never from the investment component (para 85).'},
-        {t:'200: the entity’s 20% share',why:'The fee is earned over the contract’s life through the CSM machinery, not on day one. And the account itself is excluded from revenue outright (para 85).'}],cite:['85']},fresh);
+      await quiz({kicker:'Presentation check',q:'The 1’000 premium: how much of it is insurance revenue?',options:[
+        {t:'None of it: receiving cash is not service',ok:true,why:'No revenue arises when the premium is received; the cash lands on the balance sheet. And the <strong>account balance</strong>, the amount repayable to Ana in all circumstances, is an <strong>investment component</strong> that paragraph 85 keeps out of insurance revenue and expenses, forever. IFRS 17 revenue is earned from service, not collected from premiums.'},
+        {t:'All 1’000: premiums are revenue',why:'That was IFRS 4. Under IFRS 17 the premium lands on the balance sheet; revenue is earned over time, and never from the investment component (paragraph 85).'},
+        {t:'200: the entity’s 20% share',why:'The fee is earned over the contract’s life through the CSM machinery, not on day one. And the account itself is excluded from revenue outright (paragraph 85).'}],cite:['85']},fresh);
       g.classList.add('done');premiumDone=true;P.premium=1;save();updateObj();
     },
     board:async(g)=>{
@@ -1586,8 +1665,8 @@ async function roomStudio(){
         ]);
         await quiz({kicker:'Chalkboard · step 1',intro:MEMO,q:'Which number is “the entity’s share of the fair value of the underlying items”?',options:[
           {t:'35: the PV of the future fees',ok:true,why:'The entity’s share of the pool is what it expects to extract from the pool: the fee stream. Its PV, <span class="num">35</span>, opens the waterfall.'},
-          {t:'200: 20% of the 1,000 account',why:'The 20% applies to <em>returns</em>, not the balance. The entity’s share is the PV of expected fees: 35.'},
-          {t:'1,000: the fair value of the pool itself',why:'The pool belongs to the measurement, but the <em>entity’s share</em> of it is only the fee stream. The rest is Ana’s.'}],cite:['B104(b)(i)']},fresh);
+          {t:'200: 20% of the 1’000 account',why:'The 20% applies to <em>returns</em>, not the balance. The entity’s share is the PV of expected fees: 35.'},
+          {t:'1’000: the fair value of the pool itself',why:'The pool belongs to the measurement, but the <em>entity’s share</em> of it is only the fee stream. The rest is Ana’s.'}],cite:['B104(b)(i)']},fresh);
         growBar(0);boardStep=1;P.board=1;save();updateObj();
       } else if(boardStep===1){
         await quiz({kicker:'Chalkboard · step 2',intro:MEMO,q:'B104: variable fee = entity’s share of the pool’s FV, less fulfilment cashflows that do not vary with the pool. Fulfilment cashflows include the risk adjustment. So the variable fee is…',options:[
@@ -1597,9 +1676,9 @@ async function roomStudio(){
         growBar(1);growBar(2);growBar(3);boardStep=2;P.board=2;save();updateObj();
       } else {
         await quiz({kicker:'Chalkboard · step 3',intro:MEMO,q:'The variable fee is 20. What CSM do you set up, and what hits P&L today?',options:[
-          {t:'CSM 20, P&L nil: the CSM is the day-one balancing item',ok:true,why:'para 38 makes the CSM absorb the day-one surplus so no profit is booked at inception. With nothing else on the inception file, the CSM equals the variable fee: <span class="num">20</span> of unearned profit, released as you serve.'},
+          {t:'CSM 20, P&L nil: the CSM is the day-one balancing item',ok:true,why:'Paragraph 38 makes the CSM absorb the day-one surplus so no profit is booked at inception. With nothing else on the inception file, the CSM equals the variable fee: <span class="num">20</span> of unearned profit, released as you serve.'},
           {t:'CSM 15: the RA still has to come off the fee',why:'It already did. The RA is part of the fulfilment cash flows, so B104 netted it inside the variable fee: 35 − 10 − 5 = 20. Taking it off twice would double-count.'},
-          {t:'CSM 0, P&L 20: profit is recognized when priced',why:'That’s cash accounting. IFRS 17 sets up unearned profit at inception (para 38) and releases it over the service period.'}],cite:['38','B104']},fresh);
+          {t:'CSM 0, P&L 20: profit is recognized when priced',why:'That’s cash accounting. IFRS 17 sets up unearned profit at inception (paragraph 38) and releases it over the service period.'}],cite:['38','B104']},fresh);
         growBar(4);boardStep=3;P.board=3;save();g.classList.add('done');updateObj();
       }
     },
@@ -1619,20 +1698,20 @@ async function roomStudio(){
 /* ================= ROOM: MARKET ROOM ================= */
 const EVENTS=[
   {btn:'ev1',label:'Policyholder share',dest:'IFIE',deltas:{account:120},
-   qz:{kicker:'Event 1 · where does it go?',q:'The fund returned 12% vs 10% expected: the pool grows by 120, to 1,120. Per the contract, Ana’s account is credited 80% of the return, 96, so it stands at 1,096; the other 24 is the entity’s share, the raw material of your fees. Where does the growth in your obligation to Ana go?',options:[
-    {t:'IFIE: it mirrors the growth of her account',ok:true,why:'The liability to Ana grows exactly as her account grows: 1,000 + 96 = <span class="num">1,096</span>. That movement runs through <strong>insurance finance income/expense</strong> (B111), matched by investment income on the pool, so the net effect on your profit is essentially nil: it was never your money. The bridge to the books: pool <span class="num">1,120</span> = Ana’s account <span class="num">1,096</span> + the <span class="num">24</span> that funds your fees. The better-than-expected part of that 24 is the next event.'},
+   qz:{kicker:'Event 1 · where does it go?',q:'The fund returned 12% vs 10% expected: the pool grows by 120, to 1’120. Per the contract, Ana’s account is credited 80% of the return, 96, so it stands at 1’096; the other 24 is the entity’s share, the raw material of your fees. Where does the growth in your obligation to Ana go?',options:[
+    {t:'IFIE: it mirrors the growth of her account',ok:true,why:'The liability to Ana grows exactly as her account grows: 1’000 + 96 = <span class="num">1’096</span>. That movement runs through <strong>insurance finance income/expense</strong> (B111), matched by investment income on the pool, so the net effect on your profit is essentially nil: it was never your money. The bridge to the books: pool <span class="num">1’120</span> = Ana’s account <span class="num">1’096</span> + the <span class="num">24</span> that funds your fees. The better-than-expected part of that 24 is the next event.'},
     {t:'CSM: all market effects adjust the CSM under VFA',why:'Only the <em>entity’s</em> share of the pool touches the CSM. The policyholder’s share, the 96 credited to Ana’s account, is a financial liability movement: IFIE (B111).'},
-    {t:'Revenue: the account growth is earned',why:'The account is an investment component (para 85) and the 96 credited to it belongs to Ana. Nothing here is earned by you.'}],cite:['B111','87']}},
+    {t:'Revenue: the account growth is earned',why:'The account is an investment component (paragraph 85) and the 96 credited to it belongs to Ana. Nothing here is earned by you.'}],cite:['B111','87']}},
   {btn:'ev2',label:'Entity share',dest:'CSM',deltas:{csm:4},
    qz:{kicker:'Event 2 · where does it go?',q:'The entity’s share of the change in the pool’s fair value: the fund beat expectations by 20, your 20% of that is 4.0, so the PV of your future fees rises by 4.0. Where?',options:[
     {t:'CSM +4.0: the variable fee got bigger',ok:true,why:'45(b)/B112 send the change in the <strong>entity’s share of the underlying items’ fair value</strong> into the CSM, this <em>replaces</em> GMM’s CSM interest accretion at inception-date rates. Good year → fatter variable fee → more unearned profit to release later.'},
-    {t:'IFIE: market effects are finance effects',why:'Under GMM, yes. Under VFA the entity’s share of pool performance is future-service profit, it adjusts the CSM (para 45(b), B112). This is the single biggest GMM/VFA difference.'},
-    {t:'P&L now: the good year already happened',why:'The <em>fees</em> haven’t been earned yet; their PV went up. Future service → CSM (para 45(b)).'}],cite:['45(b)','B112']}},
+    {t:'IFIE: market effects are finance effects',why:'Under GMM, yes. Under VFA the entity’s share of pool performance is future-service profit, it adjusts the CSM (paragraph 45(b), B112). This is the single biggest GMM/VFA difference.'},
+    {t:'P&L now: the good year already happened',why:'The <em>fees</em> haven’t been earned yet; their PV went up. Future service → CSM (paragraph 45(b)).'}],cite:['45(b)','B112']}},
   {btn:'ev3',label:'Mortality study',dest:'CSM',deltas:{csm:-1},
    qz:{kicker:'Event 3 · where does it go?',q:'The annual mortality study worsens: PV of future excess death claims up 1.0, measured at current rates. Where?',options:[
-    {t:'CSM −1.0: future-service fulfilment cashflow change',ok:true,why:'Future-service FCF changes adjust the CSM (para 45(c), B113(a)), and under VFA they’re measured at <strong>current</strong> rates, not GMM’s locked-in rates. Your unearned profit absorbs the worse outlook: 20 + 4 − 1 = <span class="num">23</span> before release.'},
-    {t:'P&L now: assumptions changed, book the hit',why:'Only if it related to current or past service. Future excess claims are future service, the CSM absorbs it (para 45(c)); P&L feels it slowly, through smaller releases.'},
-    {t:'IFIE: discounting is involved',why:'The driver is a non-financial assumption (mortality), not rates. Future-service FCF changes go to the CSM (para 45(c)/B113(a)).'}],cite:['45(c)','B113(a)']}},
+    {t:'CSM −1.0: future-service fulfilment cashflow change',ok:true,why:'Future-service FCF changes adjust the CSM (paragraph 45(c), B113(a)), and under VFA they’re measured at <strong>current</strong> rates, not GMM’s locked-in rates. Your unearned profit absorbs the worse outlook: 20 + 4 − 1 = <span class="num">23</span> before release.'},
+    {t:'P&L now: assumptions changed, book the hit',why:'Only if it related to current or past service. Future excess claims are future service, the CSM absorbs it (paragraph 45(c)); P&L feels it slowly, through smaller releases.'},
+    {t:'IFIE: discounting is involved',why:'The driver is a non-financial assumption (mortality), not rates. Future-service FCF changes go to the CSM (paragraph 45(c)/B113(a)).'}],cite:['45(c)','B113(a)']}},
   {btn:'ev4',label:'Claims miss',dest:'P&L',deltas:{pnl:-1},
    qz:{kicker:'Event 4 · where does it go?',q:'Actual excess death claims this year: 4.0. Expected: 3.0. Where does the extra 1.0 go?',options:[
     {t:'P&L now: an experience adjustment on current service',ok:true,why:'What already happened is <strong>current service</strong>: revenue shows the expected <span class="num">3.0</span>, insurance service expenses show the actual <span class="num">4.0</span>, and the miss lands in this year’s result. No CSM adjustment, the CSM is only for future service.'},
@@ -1737,14 +1816,14 @@ async function roomMarket(){
     if(S.done.market){doorOut(sc);return;}
     if(!plaqueRead){setObjective('Objective: events <b>5/5</b> · <b>READ the GMM vs VFA sign</b>');return;}
     await talk(sc,[
-      {w:'aud',n:'Auditor',t:'“Policyholder share to finance, entity share and future-service changes to the CSM, experience to the result. Books before release: pool 1,120, of which Ana’s account 1,096 and your fee share 24, CSM 23.0. One thing left, earning some of it, at the release desk.”'},
+      {w:'aud',n:'Auditor',t:'“Policyholder share to finance, entity share and future-service changes to the CSM, experience to the result. Books before release: pool 1’120, of which Ana’s account 1’096 and your fee share 24, CSM 23.0. One thing left, earning some of it, at the release desk.”'},
     ]);
     completeRoom('market');
     setObjective('Room complete ✓ · the release desk is unlocked');
     doorOut(sc);
   }
   bindHotspots(sc,{plaque:async()=>{await teach('The sign above the chart: GMM vs VFA in one row',
-    `<p>Same 12% year, two worlds. <strong>GMM:</strong> the CSM accretes interest at rates locked in at inception; changes arising from financial risk generally do not adjust the CSM and are presented as insurance finance income/expense, in P&amp;L or split with OCI by policy choice. <strong>VFA:</strong> the CSM accretes nothing, instead the <em>entity’s share of pool performance</em> resizes it (para 45(b)), and even financial effects on the non-varying cashflows follow (B113(b)), unless the documented risk-mitigation option of B115–B118 is used. The variable fee is a stake in the pool, and the CSM is where that stake lives until earned.</p>`,['45(b)','B112','B113(b)','B115–B118']);plaqueRead=true;P.plaque=1;save();if(doneN>=EVENTS.length)await finish();}});
+    `<p>Same 12% year, two worlds. <strong>GMM:</strong> the CSM accretes interest at rates locked in at inception; changes arising from financial risk generally do not adjust the CSM and are presented as insurance finance income/expense, in P&amp;L or split with OCI by policy choice. <strong>VFA:</strong> the CSM accretes nothing, instead the <em>entity’s share of pool performance</em> resizes it (paragraph 45(b)), and even financial effects on the non-varying cashflows follow (B113(b)), unless the documented risk-mitigation option of B115–B118 is used. The variable fee is a stake in the pool, and the CSM is where that stake lives until earned.</p>`,['45(b)','B112','B113(b)','B115–B118']);plaqueRead=true;P.plaque=1;save();if(doneN>=EVENTS.length)await finish();}});
   if(fresh){
     if(P.plaque){const g=[...sc.querySelectorAll('.hs')].find(h=>h.dataset.hs==='plaque');if(g)g.classList.add('done');}
     if(doneN||P.plaque)setObjective('Objective: events <b>'+doneN+'/5</b> · '+(plaqueRead?'<b>✓ sign</b>':'<b>READ the GMM vs VFA sign</b>'));
@@ -1816,7 +1895,7 @@ async function roomRelease(){
   bindHotspots(sc,{
     units:async()=>{await teach('What the dial counts',
       `<p>Coverage units measure the <strong>quantity of benefits</strong> delivered each period (Appendix A, B119); for a contract with direct participation features the service period covers both insurance coverage and investment-related service (B119A). Two benefit quantities to project here: the <strong>sum at risk</strong> (the 5% excess payable on death) for insurance coverage, and the <strong>account balance under management</strong> for investment-related service.</p>
-       <p>The weighting is an estimate you must be able to show, not a default. Projected here: the account is expected to run near <span class="num">1,100</span> in both years, so the service under management is level, and the sum at risk, 5% of that account, is level with it. Year one ≈ year two on both measures, hence ½ and ½. A contract whose account grows steeply, or whose cover tails off, would earn a very different pattern.</p>`,['Appendix A','B119','B119A']);unitsRead=true;P.units=1;save();updateObj();},
+       <p>In this example the coverage units are built from those two quantities: the account balance and the sum at risk. Both are projected to be roughly equal in the two years — the account runs near <span class="num">1’100</span> in each year, and the sum at risk is 5% of it — so each year carries the same amount of service, and the release is ½ and ½. When an account grows or shrinks steeply instead, the pattern looks very different. Either way the weighting is a projection you must be able to support, not a default.</p>`,['Appendix A','B119','B119A']);unitsRead=true;P.units=1;save();updateObj();},
     'valve-h':async(g)=>{
       if(g.classList.contains('done'))return;
       await quiz({kicker:'Coverage units · concept',q:'For this VFA contract, the coverage units reflect the quantity of benefits from…',options:[
@@ -1835,7 +1914,7 @@ async function roomRelease(){
     rarel:async(g)=>{
       if(g.classList.contains('done'))return;
       await quiz({kicker:'The other jar',q:'The risk adjustment: 5.0 at inception, half the non-financial risk has now expired. The release of 2.5 goes to…',options:[
-        {t:'Insurance revenue: risk expired is service delivered',ok:true,why:'The RA release for expired risk flows into <strong>insurance revenue</strong> (with a policy choice in para 81 about disaggregating its finance part). Year-one revenue: 3.0 + 2.0 + 2.5 + 11.5 = <span class="num">19.0</span>.'},
+        {t:'Insurance revenue: risk expired is service delivered',ok:true,why:'The RA release for expired risk flows into <strong>insurance revenue</strong> (with a policy choice in paragraph 81 about disaggregating its finance part). Year-one revenue: 3.0 + 2.0 + 2.5 + 11.5 = <span class="num">19.0</span>.'},
         {t:'IFIE: it unwinds like a discount',why:'The unwind of discounting is a finance effect, but the <em>release for expired risk</em> is service, it belongs in revenue.'},
         {t:'It stays until maturity',why:'The RA compensates for uncertainty <em>while you bear it</em>. Expired risk has been earned; holding it back would understate service delivered.'}],cite:['81']},fresh);
       steps+=2;
@@ -1896,10 +1975,10 @@ async function roomStorm(){
   const maybeEnd=()=>{ if(!(crashDone&&lcnoteRead)||S.done.storm)return; completeRoom('storm'); endOverlay(); };
   bindHotspots(sc,{
     lcnote:async()=>{await teach('The pinned note: what a loss component is',
-      `<p><strong>1 · The loss is booked once.</strong> The CSM cannot go below zero. When bad news exceeds the CSM, the excess is a loss. That loss goes to P&amp;L immediately (para 47-48). It is not spread over time.</p>
+      `<p><strong>1 · The loss is booked once.</strong> The CSM cannot go below zero. When bad news exceeds the CSM, the excess is a loss. That loss goes to P&amp;L immediately (paragraph 47-48). It is not spread over time.</p>
        <p><strong>2 · The loss component is a memo of that loss.</strong> It sits inside the liability for remaining coverage. It records how much future service the booked loss has already paid for. It is not an extra provision.</p>
-       <p><strong>3 · Good news reverses it first.</strong> A favourable future-service change reduces the loss component before it rebuilds any CSM (para 50(b)). The reversal is a credit in P&amp;L.</p>
-       <p><strong>4 · Later revenue is shown lower. Profit is not hit again.</strong> Each period a slice of the expected claims and expenses belongs to the loss component. That slice is excluded from insurance revenue (para 50(a)). Service expenses receive an equal credit (para 103(b)). The two cancel. The profit effect of this allocation is zero.</p>`,['47–52','103(b)']);lcnoteRead=true;P.note=1;save();maybeEnd();},
+       <p><strong>3 · Good news reverses it first.</strong> A favourable future-service change reduces the loss component before it rebuilds any CSM (paragraph 50(b)). The reversal is a credit in P&amp;L.</p>
+       <p><strong>4 · Later revenue is shown lower. Profit is not hit again.</strong> Each period a slice of the expected claims and expenses belongs to the loss component. That slice is excluded from insurance revenue (paragraph 50(a)). Service expenses receive an equal credit (paragraph 103(b)). The two cancel. The profit effect of this allocation is zero.</p>`,['47–52','103(b)']);lcnoteRead=true;P.note=1;save();maybeEnd();},
     crash:async(g)=>{
       if(g.classList.contains('done'))return;
       if(step===0){
@@ -1910,30 +1989,30 @@ async function roomStorm(){
           {w:'act',n:'Chief actuary · crash memo',t:'“Add them up: <span class="num">−18.5</span> against the CSM. The CSM we opened the year with: <span class="num">11.5</span>. It will not be enough.”'},
         ]);
         await quiz({kicker:'The floor',ctx:'<div class="memo"><strong>The storm, year two:</strong> the pool falls 25%. The fulfilment economics move against you by <b>18.5</b> in total: entity share of the fair-value fall 16.5, claims outlook worse 2.0. The CSM stands at <b>11.5</b>.</div>',q:'11.5 − 18.5 = −7.0. What do you book?',options:[
-          {t:'CSM to zero; recognize a 7.0 loss in P&L now; carry a loss component of 7.0',ok:true,why:'The CSM cannot go negative. para 48: once unfavourable changes exhaust it, the excess is a <strong>loss recognized immediately</strong> in the service result, and you set up a <strong>loss component</strong> of the same amount. Note the order inside a period: adjustments come first, the release for the period comes last (para 44-45). This year nothing is left to release, so year-two revenue carries no CSM release at all.'},
-          {t:'Book CSM at −7.0 and let it recover',why:'A negative CSM would be booking future <em>losses</em> as unearned profit. para 48 floors it at zero and puts the 7.0 through P&L today.'},
-          {t:'Spread the 7.0 over the remaining coverage period',why:'Losses are not smoothed under IFRS 17. Onerous means the loss is recognized <em>when identified</em> (para 47–48).'}],cite:['48','47']},fresh);
+          {t:'CSM to zero; recognize a 7.0 loss in P&L now; carry a loss component of 7.0',ok:true,why:'The CSM cannot go negative. Paragraph 48: once unfavourable changes exhaust it, the excess is a <strong>loss recognized immediately</strong> in the service result, and you set up a <strong>loss component</strong> of the same amount. Note the order inside a period: adjustments come first, the release for the period comes last (paragraph 44-45). This year nothing is left to release, so year-two revenue carries no CSM release at all.'},
+          {t:'Book CSM at −7.0 and let it recover',why:'A negative CSM would be booking future <em>losses</em> as unearned profit. Paragraph 48 floors it at zero and puts the 7.0 through P&L today.'},
+          {t:'Spread the 7.0 over the remaining coverage period',why:'Losses are not smoothed under IFRS 17. Onerous means the loss is recognized <em>when identified</em> (paragraph 47–48).'}],cite:['48','47']},fresh);
         if(fresh)applyDeltas({account:-280,csm:-11.5,lc:7,pnl:-7});
         setLC(7);step=1;P.step=1;save();
         if(fresh)setObjective('Objective: survive the onerous year <b>1/3</b>');
       } else if(step===1){
         await quiz({kicker:'The bounce',ctx:'<div class="memo"><strong>Where you stand:</strong> the CSM is at zero and a loss component of <b>7.0</b> is open.</div>',q:'Late in the year markets claw back: favourable future-service change of +4.0. Where does it go?',options:[
-          {t:'Reverse the loss component first: LC 7.0 → 3.0, credit 4.0 to P&L',ok:true,why:'While a loss component exists, favourable future-service changes are allocated to it <strong>first</strong> (para 50(b)), presented in insurance service expenses as a <strong>reversal of losses</strong> (para 103(b)). Only after the LC hits zero would gains rebuild the CSM.'},
-          {t:'Rebuild the CSM: 0 → 4.0',why:'Not while a loss component stands. para 50(b) sends favourable changes against the LC first.'},
-          {t:'IFIE: it is a market bounce',why:'It changes the entity’s variable fee, CSM-track under VFA (para 45(b)), and LC-track first while one exists (para 50(b)).'}],cite:['50(b)','103(b)']},fresh);
+          {t:'Reverse the loss component first: LC 7.0 → 3.0, credit 4.0 to P&L',ok:true,why:'While a loss component exists, favourable future-service changes are allocated to it <strong>first</strong> (paragraph 50(b)), presented in insurance service expenses as a <strong>reversal of losses</strong> (paragraph 103(b)). Only after the LC hits zero would gains rebuild the CSM.'},
+          {t:'Rebuild the CSM: 0 → 4.0',why:'Not while a loss component stands. Paragraph 50(b) sends favourable changes against the LC first.'},
+          {t:'IFIE: it is a market bounce',why:'It changes the entity’s variable fee, CSM-track under VFA (paragraph 45(b)), and LC-track first while one exists (paragraph 50(b)).'}],cite:['50(b)','103(b)']},fresh);
         if(fresh)applyDeltas({lc:-4,pnl:4});
         setLC(3);step=2;P.step=2;save();
         if(fresh)setObjective('Objective: survive the onerous year <b>2/3</b>');
       } else {
         await quiz({kicker:'The presentation trap',q:'While the loss component exists, the period’s allocation of expected claims and expenses attributed to the LC, does it appear in insurance revenue?',options:[
-          {t:'No: excluded from revenue, offset by an equal ISE credit: net zero',ok:true,why:'50(a): amounts allocated to the loss component are <strong>excluded from insurance revenue</strong>, with a matching credit in service expenses (para 103(b)), P&L-neutral by construction. The loss already went through P&L the day the contract turned onerous; revenue must not be re-earned on service the LC pre-paid.'},
-          {t:'Yes: service is service; revenue always shows expected amounts',why:'Not for the onerous slice: that would double-count. para 50(a) excludes it; para 103(b) balances it.'},
-          {t:'Revenue shows it, and the LC pays for it as a debit to equity',why:'Nothing about the LC touches equity directly. Revenue exclusion + ISE credit, net zero (para 50, para 103(b)).'}],cite:['50(a)','103(b)']},fresh);
+          {t:'No: excluded from revenue, offset by an equal ISE credit: net zero',ok:true,why:'50(a): amounts allocated to the loss component are <strong>excluded from insurance revenue</strong>, with a matching credit in service expenses (paragraph 103(b)), P&L-neutral by construction. The loss already went through P&L the day the contract turned onerous; revenue must not be re-earned on service the LC pre-paid.'},
+          {t:'Yes: service is service; revenue always shows expected amounts',why:'Not for the onerous slice: that would double-count. Paragraph 50(a) excludes it; paragraph 103(b) balances it.'},
+          {t:'Revenue shows it, and the LC pays for it as a debit to equity',why:'Nothing about the LC touches equity directly. Revenue exclusion + ISE credit, net zero (paragraph 50, paragraph 103(b)).'}],cite:['50(a)','103(b)']},fresh);
         step=3;P.step=3;save();g.classList.add('done');
         if(fresh)setObjective('Objective: survive the onerous year <b>3/3</b>');
         sc.querySelector('.rain').style.display='none';
         await talk(sc,[
-          {w:'sys',t:'The rain thins. Maturity: Ana takes her account, smaller than she hoped, exactly as the contract promised. The payout is an investment component: it never touches revenue (para 85). Two last movements close the books. The remaining risk adjustment of 2.5 releases as year-two risk expires, into insurance revenue and P&L (para 81, B124). And the loss component runs off with the final service: excluded from revenue, offset in service expenses, net nil, because that loss was already booked the day the storm hit (para 50–52).'},
+          {w:'sys',t:'The rain thins. Maturity: Ana takes her account, smaller than she hoped, exactly as the contract promised. The payout is an investment component: it never touches revenue (paragraph 85). Two last movements close the books. The remaining risk adjustment of 2.5 releases as year-two risk expires, into insurance revenue and P&L (paragraph 81, B124). And the loss component runs off with the final service: excluded from revenue, offset in service expenses, net nil, because that loss was already booked the day the storm hit (paragraph 50–52).'},
           {w:'ph',n:'Ana Silva',t:'“Down years included, you told me where every number would go before it went there. All right. Your fee was fair.”'},
         ]);
         sc.querySelectorAll('.fig').forEach(f=>f.dataset.state='celebrate');
@@ -1962,7 +2041,7 @@ function endOverlay(){
     const card=el('div','mcard');
     card.append(el('div','qk','Engagement almost closed · case mastery '+S.score+'/100'));
     card.append(el('div','grade','Last thing: the capstone file.'));
-    card.insertAdjacentHTML('beforeend','<p>Six rooms survived. But the rooms tested what they taught, so the auditor slides two contracts across the desk that <strong>no room walked you through</strong>: one with a heavy guarantee, one with a documented hedge. Two calls, 12 mastery each. Then the engagement closes.</p>');
+    card.insertAdjacentHTML('beforeend','<p>You made it through six rooms, each testing what you had just learned. For the final challenge, the auditor hands you <strong>two contracts you have not seen before</strong>: one with a substantial guarantee and one with a documented hedge. Make two calls, worth 12 mastery points each, to close the engagement.</p>');
     const f=el('div','mfoot');
     const later=el('button','cta ghost','Back to the house');later.onclick=()=>{closeModal();renderMap();};
     const go=el('button','cta big','Open the capstone file');go.onclick=()=>{closeModal();runCapstones();};
@@ -1973,9 +2052,9 @@ function endOverlay(){
   const grade=S.score>=100?'Full marks. The case is mastered.':S.score>=85?'A strong file, a few findings still open.':S.score>=60?'The shape is there; the audit file shows where to look.':'An honest first pass. The retake desk is open.';
   card.append(el('div','qk','Engagement closed · case mastery '+S.score+'/100'));
   card.append(el('div','grade',grade));
-  card.append(el('p','','You classified under B101, priced the variable fee under B104, booked a year of economics through para 45, released by coverage units under B119A, survived an onerous cycle under para 47–52, and made two calls the rooms never rehearsed. The house stays open, every room can be revisited with nothing at stake, and the ⓘ board on the map indexes every paragraph.'));
+  card.append(el('p','','You classified under B101, priced the variable fee under B104, booked a year of economics through paragraph 45, released by coverage units under B119A, survived an onerous cycle under paragraph 47–52, and made two calls the rooms never rehearsed. The house stays open, every room can be revisited with nothing at stake, and the ⓘ board on the map indexes every paragraph.'));
   const rules=el('div','rules');
-  ['B101(a)–(c)','B102','B107–B108','B109','B104','38','85','B111','45(b)/B112','45(c)/B113(a)','B113(b)','B115–B118','45(e)/B119/B119A','81','47–48','50–52','103(b)'].forEach(c=>rules.append(el('span','cite',c)));
+  rules.innerHTML=['B101(a)–(c)','B102','B107–B108','B109','B104','38','85','B111','45(b)/B112','45(c)/B113(a)','B113(b)','B115–B118','45(e)/B119/B119A','81','47–48','50–52','103(b)'].map(citeChip).join('');
   card.append(rules);
   const R=(!S.drillDue)?retakeList():[];
   if(R.length)card.insertAdjacentHTML('beforeend','<p class="fy">The auditor offers a retake: answer the '+R.length+' question'+(R.length>1?'s':'')+' you missed, all right in one sitting, then walk through the numbers drill, and the mastery those findings carry, '+R.reduce((t,r)=>t+(r.p||QUESTION_PTS),0)+' points, is earned back.</p>');
@@ -2019,7 +2098,7 @@ function applyTheme(t){
   else delete document.documentElement.dataset.theme;
   document.getElementById('themeBtn').textContent=t==='light'?'☾ dark':'☀ light';
 }
-let THEME=localStorage.getItem(THEME_KEY)||'dark';
+let THEME=localStorage.getItem(THEME_KEY)||'light';
 applyTheme(THEME);
 document.getElementById('themeBtn').onclick=()=>{THEME=THEME==='light'?'dark':'light';try{localStorage.setItem(THEME_KEY,THEME);}catch(e){}applyTheme(THEME);};
 /* one-time phone tip: how to move through wide rooms on a small screen */
