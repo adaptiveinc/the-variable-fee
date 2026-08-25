@@ -773,7 +773,7 @@ function showAudit(){
   if(!S.mistakes.length){
     card.insertAdjacentHTML('beforeend','<p>No findings. Every answer so far was right the first time; the mastery meter shows what that has earned.</p>');
   } else {
-    if(open)card.insertAdjacentHTML('beforeend','<p class="fy">The right calls stay sealed while findings are open, no peeking before the retake. Clear the retake (✎ quiz) and they appear here with full explanations.</p>');
+    if(open)card.insertAdjacentHTML('beforeend','<p class="fy">You earn mastery points when you answer a quiz correctly. The quizzes you answered wrongly are tracked here; retake them from ✎ quiz and answer them correctly, and you earn the missing points.</p>');
     S.mistakes.forEach((m,i)=>{
       const rev=!!m.done;
       card.insertAdjacentHTML('beforeend',
