@@ -506,120 +506,35 @@
 
 <script>
 'use strict';
-/* ================= state ================= */
-const KEY='vfa-house-v2'; /* v2: mastery is earned from zero, capstone cases added */
-const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
-/* Swiss thousands separator: 1’120, matching the audience's convention */
-const fmt = v => {const r=Math.round(v*10)/10;return r.toFixed(r%1===0?0:1).replace(/\B(?=(\d{3})+(?!\d))/g,"’");};
-/* mastery economy: 19 room questions x 4 + 2 capstone cases x 12 = 100 */
-const QUESTION_PTS=4, CAPSTONE_PTS=12;
-let S={done:{},score:0,started:false};
-try{const j=JSON.parse(localStorage.getItem(KEY)); if(j&&j.done)S=j;}catch(e){}
-S.progress=S.progress||{};
-S.mistakes=S.mistakes||[];
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}};
-function prog(id){ if(!S.progress)S.progress={}; return S.progress[id]||(S.progress[id]={}); }
-
-const ROOM_ORDER=['lobby','underwriting','studio','market','release','storm'];
-const ROOM_NAMES={lobby:'Reception',underwriting:'Underwriting office',studio:'Actuarial studio',market:'Market room',release:'Release desk',storm:'The storm attic'};
-function unlockedCount(){let n=1;for(const id of ROOM_ORDER){if(S.done[id])n=Math.max(n,ROOM_ORDER.indexOf(id)+2);}return Math.min(n,6);}
-
-/* ledger, rebuilt from completed rooms */
-const CHECK={
-  base:{account:0,ra:0,csm:0,lc:0,pnl:0},
-  studio:{account:1000,ra:5,csm:20,lc:0,pnl:0},
-  market:{account:1120,ra:5,csm:23,lc:0,pnl:-1},
-  release:{account:1120,ra:2.5,csm:11.5,lc:0,pnl:13},
-  storm:{account:840,ra:0,csm:0,lc:0,pnl:12.5},
+/* ================= what this game is =================
+   Read by the shared chunks (progress, ledger, shell, nav, retake-flow).
+   Everything here is copy or a key; the mechanics live in shared/. */
+const GAME={
+  key:'vfa-house-v2', /* v2: mastery is earned from zero, capstone cases added */
+  themeKey:'vfa-theme',
+  tipKey:'vfa-mobiletip',
+  /* mastery economy: 19 room questions x 4 + 2 capstone cases x 12 = 100 */
+  questionPts:4, capstonePts:12,
+  where:'Learning Variable Fee Assurance in Mutual & Torres Assurance House',
+  wherePrefix:'Mutual & Torres · ',
+  backLabel:'← House map',
+  restartCopy:'All room progress, the ledger and the audit file will reset. Your theme choice stays.',
+  ledgerOpen:()=>!(L.account===0&&L.csm===0&&!S.done.studio),
+  booksCallout:'<b>Your books just opened.</b>These numbers evolve with every decision you make. Click any of them to see its full roll-forward.',
+  masteryCallout:'<b>That answer just counted, up here.</b>The mastery bar collects points across the whole case: a room question answered right on the first try banks 4, each capstone case at the end banks 12, and a full run is 100. A miss banks nothing but files a finding instead; clear the retake later and those points come back. Click the bar anytime to open your audit file.',
+  drill:{
+    /* full sentences, not glued fragments: the drill reads differently in each place */
+    retakeIntro:'Every missed question answered right. Before the mastery comes back, the auditor walks you through the numbers of the house: five quick questions, from the day-one CSM to the loss component. Wrong answers cost nothing here, you only have to finish.',
+    libLine:'five quick questions on the numbers of this house, from the day-one CSM to the loss component. Practice only: nothing at stake.',
+    pendingLine:'Your retake is cleared. Finish the numbers drill, five quick questions with nothing at stake, and the mastery your findings carried comes back.',
+    doneCopy:'All five numbers walked through, from the day-one CSM of 20 to the loss component of 7.'},
+  capstoneTitle:'The final two cases',
+  capstoneBlurb:'two contracts no room taught, worth 12 mastery each. The engagement closes only after you have made these two calls.',
+  capstoneIntro:'The rooms tested what you had just learned. These final two cases test whether you can apply the same rules to something new: a contract with a substantial guarantee and a hedge against the financial risk in the fee. Get each one right on your first attempt to earn <strong>12 mastery points</strong>. Get it wrong and a finding is recorded, just like before, with another attempt available later. Take your time with the memos.',
 };
-let L={...CHECK.base};
-function ledgerFromState(){
-  L={...CHECK.base};
-  for(const k of ['studio','market','release','storm']) if(S.done[k]) L={...CHECK[k]};
-  const p=S.progress||{};
-  if(!S.done.studio&&p.studio&&p.studio.paid){L.account+=1000;L.ra+=5;L.csm+=20;}
-  if(!S.done.market&&p.market){const n=p.market.doneN||0;const ds=[{account:120},{csm:4},{csm:-1},{pnl:-1},null];
-    for(let i=0;i<n;i++){const d=ds[i];if(d)for(const k in d)L[k]+=d[k];}}
-  if(!S.done.release&&p.release){if(p.release.valve){L.csm-=11.5;L.pnl+=11.5;}if(p.release.ra){L.ra-=2.5;L.pnl+=2.5;}}
-  if(!S.done.storm&&p.storm){const s=p.storm.step||0;
-    if(s>=3)L={...CHECK.storm};
-    else{if(s>=1){L.account-=280;L.csm-=11.5;L.lc+=7;L.pnl-=7;}if(s>=2){L.lc-=4;L.pnl+=4;}}}
-  for(const k in L)L[k]=Math.round(L[k]*100)/100;
-}
-ledgerFromState();
-
-function renderChips(){
-  const c=document.getElementById('ledgerchips');
-  if(L.account===0&&L.csm===0&&!S.done.studio){c.innerHTML='';return;}
-  c.innerHTML =
-    chip('Pool',L.account,'acct')+chip('RA',L.ra,'ra')+chip('CSM',L.csm,'csm','hot')
-    +(L.lc>0?chip('LC',L.lc,'lc','neg'):'')
-    +chip('P&L',L.pnl,'pnl',L.pnl<0?'neg':'');
-  function chip(l,v,id,cls){return `<div class="chip ${cls||''}" id="chip-${id}" role="button" tabindex="0" title="Click for the roll-forward" aria-label="${l} ${fmt(v)}, open the roll-forward"><span>${l}</span><b>${fmt(v)}</b></div>`;}
-  const KEYMAP={acct:'account',ra:'ra',csm:'csm',lc:'lc',pnl:'pnl'};
-  c.querySelectorAll('.chip').forEach(elc=>{
-    const open=()=>showComponent(KEYMAP[elc.id.replace('chip-','')]);
-    elc.onclick=open;
-    elc.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}};
-  });
-}
-function showBooksCallout(){
-  if(S.seenBooks)return;
-  S.seenBooks=1;save();
-  const chips=document.getElementById('ledgerchips');
-  if(!chips||!chips.children.length)return;
-  const hud=document.getElementById('hud');
-  const c=el('div','books-callout','<button class="bc-x" aria-label="Dismiss">×</button><b>Your books just opened.</b>These numbers evolve with every decision you make. Click any of them to see its full roll-forward.');
-  hud.append(c);
-  /* aim the arrow at the middle of the ledger chips */
-  const center=chips.offsetLeft+chips.offsetWidth/2;
-  c.style.right=Math.max(8,hud.clientWidth-center-52)+'px';
-  const kill=()=>c.remove();
-  c.onclick=kill;
-  setTimeout(kill,14000);
-}
-function applyDeltas(d,force){
-  if(!d)return;
-  for(const k in d)L[k]=Math.round((L[k]+d[k])*100)/100;
-  renderChips();
-  showBooksCallout();
-  for(const k in d){const m={account:'acct',ra:'ra',csm:'csm',lc:'lc',pnl:'pnl'}[k];
-    const e=document.getElementById('chip-'+m); if(e)e.classList.add('flash');}
-}
-function setAudit(){
-  document.getElementById('auditVal').textContent=S.score;
-  document.getElementById('auditBar').style.width=Math.max(0,S.score)+'%';
-}
-/* mastery is earned, never taken away: a first-try answer banks its points, a miss
-   banks nothing and files a finding whose points come back through the retake */
-function award(pts){ S.score=Math.min(100,S.score+(pts||QUESTION_PTS)); setAudit(); save(); showMasteryCallout(); }
-function penalty(active){ if(!active)return; save(); showMasteryCallout(); }
-/* one-time callout after the very first scored answer: what the mastery bar is
-   and how its points are collected (mirrors the books callout on the ledger) */
-let MASTERY_CO_PENDING=false;
-function showMasteryCallout(){
-  if(S.seenMastery||MASTERY_CO_PENDING)return;
-  MASTERY_CO_PENDING=true;
-  const attempt=()=>{
-    /* wait for the quiz card to close, so the callout is not buried under it */
-    if(mroot.classList.contains('open')){setTimeout(attempt,700);return;}
-    MASTERY_CO_PENDING=false;
-    if(S.seenMastery)return;
-    S.seenMastery=1;save();
-    const a=document.getElementById('audit'), hud=document.getElementById('hud');
-    if(!a||!hud)return;
-    const c=el('div','books-callout','<button class="bc-x" aria-label="Dismiss">×</button><b>That answer just counted, up here.</b>The mastery bar collects points across the whole case: a room question answered right on the first try banks 4, each capstone case at the end banks 12, and a full run is 100. A miss banks nothing but files a finding instead; clear the retake later and those points come back. Click the bar anytime to open your audit file.');
-    hud.append(c);
-    const center=a.offsetLeft+a.offsetWidth/2;
-    c.style.right=Math.max(8,hud.clientWidth-center-52)+'px';
-    const kill=()=>c.remove();
-    c.onclick=kill;
-    setTimeout(kill,18000);
-  };
-  setTimeout(attempt,700);
-}
-function setWhere(t){document.getElementById('whereLabel').textContent=t;}
-
+/* the cast: which figure kind animates for each dialogue slot, and its chip */
+const SPEAKERS={ph:'ana',act:'actuary',aud:'auditor',uw:'staff',you:'avatar'};
+const SPEAKER_TAGS={ph:'AS',act:'ACT',aud:'AUD',uw:'UW',you:'YOU',sys:'·'};
 /* ================= modal system ================= */
 const mroot=document.getElementById('modal-root'), mwrap=document.getElementById('mwrap');
 let MODAL_LASTFOCUS=null;
@@ -680,6 +595,181 @@ document.addEventListener('click',e=>{const t=e.target.closest('.cite');
   if(!t){document.querySelectorAll('.cite-pop').forEach(p=>p.remove());return;} showCitePop(t);});
 document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.closest&&e.target.closest('.cite')){e.preventDefault();showCitePop(e.target.closest('.cite'));}});
 
+'use strict';
+/* ================= progress: saved state, mastery economy =================
+   Every game on the kit shares one economy: a question answered right on the
+   FIRST try banks its points, a miss banks nothing and files a finding whose
+   points come back through the retake. Mastery is earned, never taken away.
+
+   The host game supplies GAME (js/config.js), loaded before this chunk:
+     GAME.key          localStorage key for the save
+     GAME.questionPts  points a station/room question banks
+     GAME.capstonePts  points a capstone case banks
+     GAME.where        the idle "where am I" label
+     GAME.masteryCallout  one-time explainer for the mastery bar
+*/
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* localStorage throws outright on opaque origins (a file:// or data: preview),
+   not just when full. Every read and write goes through these two. */
+const lsGet=k=>{try{return localStorage.getItem(k);}catch(e){return null;}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,v);}catch(e){}};
+/* Swiss thousands separator: 1’120, matching the audience's convention */
+const fmt = v => {const r=Math.round(v*10)/10;return r.toFixed(r%1===0?0:1).replace(/\B(?=(\d{3})+(?!\d))/g,"’");};
+/* two decimals, for the recovery lines that must sum to exactly zero */
+const fmt2 = v => {const r=Math.round(v*100)/100;return (Object.is(r,-0)?0:r).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))(?=.*\.)/g,"’");};
+const QUESTION_PTS=GAME.questionPts, CAPSTONE_PTS=GAME.capstonePts;
+
+let S={done:{},score:0,started:false};
+try{const j=JSON.parse(lsGet(GAME.key)); if(j&&j.done)S=j;}catch(e){}
+S.progress=S.progress||{};
+S.mistakes=S.mistakes||[];
+const save=()=>lsSet(GAME.key,JSON.stringify(S));
+function prog(id){ if(!S.progress)S.progress={}; return S.progress[id]||(S.progress[id]={}); }
+function freshState(){return {done:{},score:0,started:true,progress:{},mistakes:[]};}
+
+function setAudit(){
+  document.getElementById('auditVal').textContent=S.score;
+  document.getElementById('auditBar').style.width=Math.max(0,S.score)+'%';
+}
+function award(pts){ S.score=Math.min(100,S.score+(pts||QUESTION_PTS)); setAudit(); save(); showMasteryCallout(); }
+function penalty(active){ if(!active)return; save(); showMasteryCallout(); }
+
+/* one-time callout after the very first scored answer: what the mastery bar is
+   and how its points are collected (mirrors the books callout on the ledger) */
+let MASTERY_CO_PENDING=false;
+function showMasteryCallout(){
+  if(S.seenMastery||MASTERY_CO_PENDING)return;
+  MASTERY_CO_PENDING=true;
+  const attempt=()=>{
+    /* wait for the quiz card to close, so the callout is not buried under it */
+    if(mroot.classList.contains('open')){setTimeout(attempt,700);return;}
+    MASTERY_CO_PENDING=false;
+    if(S.seenMastery)return;
+    S.seenMastery=1;save();
+    callout(document.getElementById('audit'),GAME.masteryCallout,18000);
+  };
+  setTimeout(attempt,700);
+}
+/* the gold speech bubble that hangs off a HUD element and points at it */
+function callout(target,html,ms){
+  const hud=document.getElementById('hud');
+  if(!target||!hud)return;
+  const c=el('div','books-callout','<button class="bc-x" aria-label="Dismiss">×</button>'+html);
+  hud.append(c);
+  const center=target.offsetLeft+target.offsetWidth/2;
+  c.style.right=Math.max(8,hud.clientWidth-center-52)+'px';
+  const kill=()=>c.remove();
+  c.onclick=kill;
+  setTimeout(kill,ms||14000);
+  return c;
+}
+function setWhere(t){document.getElementById('whereLabel').textContent=t;}
+/* ================= ledger: the chips in the top bar =================
+   The books only move when the player books correctly. `L` holds the live
+   balances; the game rebuilds it from saved state (ledgerFromState) and
+   applies deltas as the player books.
+
+   The host game supplies:
+     LEDGER_CHIPS  [{k:'csm', label:'CSM', cls:'hot', hideZero:true}, ...]
+                   `k` is the key into L and the id suffix of the chip
+     GAME.ledgerOpen()  true once the books have opened (chips render)
+     GAME.booksCallout  one-time explainer shown when the books first open
+     COMP_NAMES / ledgerHistory()  used by the roll-forward (rollforward.js)
+*/
+let L={};
+function renderChips(){
+  const c=document.getElementById('ledgerchips');
+  if(!c)return;
+  if(!GAME.ledgerOpen()){c.innerHTML='';return;}
+  c.innerHTML=LEDGER_CHIPS.filter(d=>!(d.hideZero&&!L[d.k]))
+    .map(d=>{
+      const cls=typeof d.cls==='function'?d.cls(L[d.k]):(d.cls||'');
+      const v=(d.dp===2?fmt2:fmt)(L[d.k]);
+      return `<div class="chip ${cls}" id="chip-${d.k}" role="button" tabindex="0" title="Click for the roll-forward" aria-label="${d.label} ${v}, open the roll-forward"><span>${d.label}</span><b>${v}</b></div>`;
+    }).join('');
+  c.querySelectorAll('.chip').forEach(elc=>{
+    const k=elc.id.replace('chip-','');
+    const open=()=>showComponent(k);
+    elc.onclick=open;
+    elc.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}};
+  });
+}
+function showBooksCallout(){
+  if(S.seenBooks)return;
+  const chips=document.getElementById('ledgerchips');
+  if(!chips||!chips.children.length)return;
+  S.seenBooks=1;save();
+  callout(chips,GAME.booksCallout,14000);
+}
+function applyDeltas(d,force){
+  if(!d)return;
+  for(const k in d)L[k]=Math.round((L[k]+d[k])*100)/100;
+  renderChips();
+  showBooksCallout();
+  for(const k in d){const e=document.getElementById('chip-'+k); if(e)e.classList.add('flash');}
+}
+/* ================= this house's books ================= */
+const ROOM_ORDER=['lobby','underwriting','studio','market','release','storm'];
+const ROOM_NAMES={lobby:'Reception',underwriting:'Underwriting office',studio:'Actuarial studio',market:'Market room',release:'Release desk',storm:'The storm attic'};
+
+const LEDGER_CHIPS=[
+  {k:'account',label:'Pool'},
+  {k:'ra',label:'RA'},
+  {k:'csm',label:'CSM',cls:'hot'},
+  {k:'lc',label:'LC',cls:'neg',hideZero:true},
+  {k:'pnl',label:'P&L',cls:v=>v<0?'neg':''},
+];
+const COMP_NAMES={account:'Underlying items (the fund pool)',ra:'Risk adjustment',csm:'CSM (unearned profit)',lc:'Loss component',pnl:'P&L booked to date'};
+const COMP_NOTES={account:'This chip is the gross fund pool. Ana’s account is her contractual share of it; the rest is the entity’s accrued fee share. The year-one bridge: pool 1’120 = her account 1’096 + fee share 24.'};
+
+/* ledger, rebuilt from completed rooms */
+const CHECK={
+  base:{account:0,ra:0,csm:0,lc:0,pnl:0},
+  studio:{account:1000,ra:5,csm:20,lc:0,pnl:0},
+  market:{account:1120,ra:5,csm:23,lc:0,pnl:-1},
+  release:{account:1120,ra:2.5,csm:11.5,lc:0,pnl:13},
+  storm:{account:840,ra:0,csm:0,lc:0,pnl:12.5},
+};
+function ledgerFromState(){
+  L={...CHECK.base};
+  for(const k of ['studio','market','release','storm']) if(S.done[k]) L={...CHECK[k]};
+  const p=S.progress||{};
+  if(!S.done.studio&&p.studio&&p.studio.paid){L.account+=1000;L.ra+=5;L.csm+=20;}
+  if(!S.done.market&&p.market){const n=p.market.doneN||0;const ds=[{account:120},{csm:4},{csm:-1},{pnl:-1},null];
+    for(let i=0;i<n;i++){const d=ds[i];if(d)for(const k in d)L[k]+=d[k];}}
+  if(!S.done.release&&p.release){if(p.release.valve){L.csm-=11.5;L.pnl+=11.5;}if(p.release.ra){L.ra-=2.5;L.pnl+=2.5;}}
+  if(!S.done.storm&&p.storm){const s=p.storm.step||0;
+    if(s>=3)L={...CHECK.storm};
+    else{if(s>=1){L.account-=280;L.csm-=11.5;L.lc+=7;L.pnl-=7;}if(s>=2){L.lc-=4;L.pnl+=4;}}}
+  for(const k in L)L[k]=Math.round(L[k]*100)/100;
+}
+ledgerFromState();
+
+function ledgerHistory(){
+  const H=[]; const p=S.progress||{};
+  const add=(room,label,d)=>H.push({room,label,d});
+  if(S.done.studio||(p.studio&&p.studio.paid)){
+    add('Studio','Premium of 1’000 into the fund pool',{account:1000});
+    add('Studio','Risk adjustment set up at inception',{ra:5});
+    add('Studio','Day-one CSM: the variable fee of 20 (35 − 10 − 5)',{csm:20});}
+  const wires=S.done.market?5:(p.market?(p.market.doneN||0):0);
+  const WD=[['Fund return 120: Ana’s account +96, entity share +24',{account:120}],
+            ['Entity share of pool gains lifts future fees',{csm:4}],
+            ['Mortality study worsens future claims',{csm:-1}],
+            ['Claims miss: actual 4.0 vs expected 3.0',{pnl:-1}],
+            ['Rates what-if: nothing booked',null]];
+  for(let i=0;i<wires;i++){if(WD[i][1])add('Market · event '+(i+1),WD[i][0],WD[i][1]);}
+  const pr=p.release||{};
+  if(S.done.release||pr.valve)add('Release','CSM release to revenue: 23.0 × ½',{csm:-11.5,pnl:11.5});
+  if(S.done.release||pr.ra)add('Release','RA release for expired risk',{ra:-2.5,pnl:2.5});
+  const st=S.done.storm?3:(p.storm?(p.storm.step||0):0);
+  if(st>=1)add('Storm','Crash: pool −25%. CSM wiped. Loss booked',{account:-280,csm:-11.5,lc:7,pnl:-7});
+  if(st>=2)add('Storm','Recovery reverses the loss component',{lc:-4,pnl:4});
+  if(S.done.storm){
+    add('Storm','Year two: last RA released as the remaining risk expires',{ra:-2.5,pnl:2.5});
+    add('Storm','Maturity: LC runs off, out of revenue, offset in expenses, net nil',{lc:-3});}
+  return H;
+}
 function teach(title,html,cites){
   return new Promise(res=>{
     const card=el('div','mcard');
@@ -707,38 +797,20 @@ function showDirectory(){
      <hr style="border:none;border-top:1px solid #2c394a;margin:14px 0">
      <p><strong>Assumptions of this house.</strong> The numbers are a teaching simplification of IFRS 17 (as issued; jurisdictional adoptions such as AASB 17 are word-identical here). One contract stands in for a group of contracts. Two annual periods, no discounting shown separately, and the time value of money is folded into the fair-value movements. Fees are 20% of returns; Ana's account is credited 80% of returns. The RA releases evenly over the two years, and its whole movement is shown in the service result (the paragraph 81 disaggregation choice is not taken). No OCI option is used. Out of scope: the premium allocation approach, transition, reinsurance measurement, and disclosure requirements.</p>`);
 }
-function ledgerHistory(){
-  const H=[]; const p=S.progress||{};
-  const add=(room,label,d)=>H.push({room,label,d});
-  if(S.done.studio||(p.studio&&p.studio.paid)){
-    add('Studio','Premium of 1’000 into the fund pool',{account:1000});
-    add('Studio','Risk adjustment set up at inception',{ra:5});
-    add('Studio','Day-one CSM: the variable fee of 20 (35 − 10 − 5)',{csm:20});}
-  const wires=S.done.market?5:(p.market?(p.market.doneN||0):0);
-  const WD=[['Fund return 120: Ana’s account +96, entity share +24',{account:120}],
-            ['Entity share of pool gains lifts future fees',{csm:4}],
-            ['Mortality study worsens future claims',{csm:-1}],
-            ['Claims miss: actual 4.0 vs expected 3.0',{pnl:-1}],
-            ['Rates what-if: nothing booked',null]];
-  for(let i=0;i<wires;i++){if(WD[i][1])add('Market · event '+(i+1),WD[i][0],WD[i][1]);}
-  const pr=p.release||{};
-  if(S.done.release||pr.valve)add('Release','CSM release to revenue: 23.0 × ½',{csm:-11.5,pnl:11.5});
-  if(S.done.release||pr.ra)add('Release','RA release for expired risk',{ra:-2.5,pnl:2.5});
-  const st=S.done.storm?3:(p.storm?(p.storm.step||0):0);
-  if(st>=1)add('Storm','Crash: pool −25%. CSM wiped. Loss booked',{account:-280,csm:-11.5,lc:7,pnl:-7});
-  if(st>=2)add('Storm','Recovery reverses the loss component',{lc:-4,pnl:4});
-  if(S.done.storm){
-    add('Storm','Year two: last RA released as the remaining risk expires',{ra:-2.5,pnl:2.5});
-    add('Storm','Maturity: LC runs off, out of revenue, offset in expenses, net nil',{lc:-3});}
-  return H;
-}
-const COMP_NAMES={account:'Underlying items (the fund pool)',ra:'Risk adjustment',csm:'CSM (unearned profit)',lc:'Loss component',pnl:'P&L booked to date'};
+/* ================= roll-forward: one component's whole story =================
+   Clicking a ledger chip opens every movement that built it, as a waterfall
+   plus a table. Generic over the game: the host supplies COMP_NAMES (chip key
+   -> full name), an optional COMP_NOTES (chip key -> explanatory line), and
+   ledgerHistory(), a flat list of {room, label, d:{key:delta}} in booking order.
+*/
 function showComponent(k){
   const H=ledgerHistory().filter(h=>h.d&&h.d[k]!==undefined);
+  const dp=(LEDGER_CHIPS.find(d=>d.k===k)||{}).dp===2?fmt2:fmt;
   const card=el('div','mcard');
   card.append(el('div','qk','Roll-forward'));
-  card.append(el('h4','',COMP_NAMES[k]+' · now '+fmt(L[k])));
-  if(k==='account')card.insertAdjacentHTML('beforeend','<p class="fy">This chip is the gross fund pool. Ana’s account is her contractual share of it; the rest is the entity’s accrued fee share. The year-one bridge: pool 1’120 = her account 1’096 + fee share 24.</p>');
+  card.append(el('h4','',(COMP_NAMES[k]||k)+' · now '+dp(L[k])));
+  const note=(typeof COMP_NOTES!=='undefined'&&COMP_NOTES)?COMP_NOTES[k]:null;
+  if(note)card.insertAdjacentHTML('beforeend','<p class="fy">'+note+'</p>');
   if(!H.length){card.insertAdjacentHTML('beforeend','<p>Nothing has been booked here yet. Play on and come back.</p>');}
   else{
     let bal=0;
@@ -755,10 +827,10 @@ function showComponent(k){
       const y1=Math.min(a,b2), hpx=Math.max(2,Math.abs(a-b2));
       bars+=`<rect x="${x}" y="${y1}" width="${bw}" height="${hpx}" rx="2" fill="${s.delta>=0?'#63b380':'#e06a5e'}" opacity=".85"/>`;
       bars+=`<text x="${x+bw/2}" y="${Ht+12}" text-anchor="middle" font-size="10" fill="#5d6b7e" font-family="var(--mono)">${i+1}</text>`;
-      bars+=`<text x="${x+bw/2}" y="${y1-3}" text-anchor="middle" font-size="10" fill="#8b98aa" font-family="var(--mono)">${fmt(s.to)}</text>`;
+      bars+=`<text x="${x+bw/2}" y="${y1-3}" text-anchor="middle" font-size="10" fill="#8b98aa" font-family="var(--mono)">${dp(s.to)}</text>`;
     });
     card.insertAdjacentHTML('beforeend',`<svg viewBox="0 0 ${Wd} ${Ht+18}" style="width:100%;margin:6px 0"><line x1="6" x2="${Wd-6}" y1="${y(0)}" y2="${y(0)}" stroke="#2c394a"/>${bars}</svg>`);
-    const rows=steps.map((s,i)=>`<tr><td class="tn">${i+1}</td><td>${s.label}<span class="troom"> · ${s.room}</span></td><td class="td ${s.delta<0?'neg':'pos'}">${s.delta>0?'+':''}${fmt(s.delta)}</td><td class="tb">${fmt(s.to)}</td></tr>`).join('');
+    const rows=steps.map((s,i)=>`<tr><td class="tn">${i+1}</td><td>${s.label}<span class="troom"> · ${s.room}</span></td><td class="td ${s.delta<0?'neg':'pos'}">${s.delta>0?'+':''}${dp(s.delta)}</td><td class="tb">${dp(s.to)}</td></tr>`).join('');
     card.insertAdjacentHTML('beforeend',`<table class="roll"><tr><th></th><th>Movement</th><th>Change</th><th>Balance</th></tr>${rows}</table>`);
   }
   const f=el('div','mfoot');const b=el('button','cta','Close');b.onclick=closeModal;f.append(b);card.append(f);
@@ -869,6 +941,14 @@ function examQuiz(o,idx,total,drill){
     }
   });
 }
+/* ================= the retake desk =================
+   A miss files a finding instead of deducting. The findings come back as a
+   retake: answer them all right in one sitting and the mastery they carried is
+   earned back. At the end of a run the numbers drill is the mandatory last step.
+
+   The host supplies NUMQ (the drill questions), CAPSTONES + runCapstones(), and
+   GAME.drill {noun, blurb, doneCopy} for the copy around them.
+*/
 function finishRetake(){
   /* the cleared findings hand back the mastery they carried */
   const back=retakeList().reduce((t,r)=>t+(r.p||QUESTION_PTS),0);
@@ -878,8 +958,8 @@ function finishRetake(){
   const card=el('div','mcard');
   card.append(el('div','qk','Retake passed'));
   card.append(el('div','grade','Findings cleared.'));
-  card.insertAdjacentHTML('beforeend','<p>Every missed question answered right'+(S.done.storm?' and the numbers walked through':'')+'. The mastery those findings carried is earned back: case mastery now stands at <strong>'+S.score+'/100</strong>. The findings stay in the audit file as history, marked cleared, with their explanations now open.</p>');
-  const f=el('div','mfoot');const b=el('button','cta big','Continue');b.onclick=()=>{closeModal();if(S.done.storm)endOverlay();};f.append(b);card.append(f);
+  card.insertAdjacentHTML('beforeend','<p>Every missed question answered right'+(isLastDone()?' and the numbers walked through':'')+'. The mastery those findings carried is earned back: case mastery now stands at <strong>'+S.score+'/100</strong>. The findings stay in the audit file as history, marked cleared, with their explanations now open.</p>');
+  const f=el('div','mfoot');const b=el('button','cta big','Continue');b.onclick=()=>{closeModal();if(isLastDone())endOverlay();};f.append(b);card.append(f);
   openModal(card,true);
 }
 async function runRetake(R){
@@ -888,14 +968,14 @@ async function runRetake(R){
     const ok=await examQuiz(qs[i],i+1,qs.length);
     if(!ok)return;
   }
-  if(!S.done.storm){finishRetake();return;}
+  if(!isLastDone()){finishRetake();return;}
   /* end-game: the numbers drill is the mandatory last step */
   S.drillDue=1;save();
   await new Promise(res=>{
     const card=el('div','mcard');
     card.append(el('div','qk','Findings cleared'));
     card.append(el('h4','','One step left: the numbers'));
-    card.insertAdjacentHTML('beforeend','<p>Every missed question answered right. Before the mastery comes back, the auditor walks you through the numbers of the house: five quick questions, from the day-one CSM to the loss component. Wrong answers cost nothing here, you only have to finish.</p>');
+    card.insertAdjacentHTML('beforeend','<p>'+GAME.drill.retakeIntro+'</p>');
     const f=el('div','mfoot');const b=el('button','cta big','Start the numbers drill');b.onclick=()=>{closeModal();res();};f.append(b);card.append(f);
     openModal(card,false);
   });
@@ -912,7 +992,7 @@ async function runDrill(){
   const card=el('div','mcard');
   card.append(el('div','qk','Numbers drill'));
   card.append(el('h4','','Drill complete'));
-  card.insertAdjacentHTML('beforeend','<p>All five numbers walked through, from the day-one CSM of 20 to the loss component of 7. No effect on mastery; run it again any time.</p>');
+  card.insertAdjacentHTML('beforeend','<p>'+GAME.drill.doneCopy+' No effect on mastery; run it again any time.</p>');
   const f=el('div','mfoot');const b=el('button','cta big','Close');b.onclick=closeModal;f.append(b);card.append(f);
   openModal(card,true);
 }
@@ -921,7 +1001,7 @@ function showQuizLib(){
   card.append(el('div','qk','Quiz library'));
   if(S.drillDue){
     card.append(el('h4','','One step left: the numbers drill'));
-    card.insertAdjacentHTML('beforeend','<p>Your retake is cleared. Finish the numbers drill, five quick questions with nothing at stake, and the mastery your findings carried comes back.</p>');
+    card.insertAdjacentHTML('beforeend','<p>'+GAME.drill.pendingLine+'</p>');
     const f=el('div','mfoot');
     const go=el('button','cta big','Finish the numbers drill');go.onclick=()=>{closeModal();runDrill();};f.append(go);
     const b=el('button','cta','Close');b.onclick=closeModal;f.append(b);
@@ -939,19 +1019,38 @@ function showQuizLib(){
     card.insertAdjacentHTML('beforeend','<p>Only the questions you got wrong are in here, '+R.length+' of them. Answer '+(R.length>1?'them all':'it')+' right in one sitting and the mastery '+(R.length>1?'they carry':'it carries')+' is earned back. One miss ends the attempt, with nothing extra lost.</p>');
     R.forEach((r,i)=>card.insertAdjacentHTML('beforeend',`<div class="finding"><div class="fhead">${i+1} · ${r.w}${r.k?' · '+r.k:''}</div><p class="fq">${r.q}</p></div>`));
   }
-  if(S.done.storm&&!S.capstoneDone)card.insertAdjacentHTML('beforeend','<p style="margin-top:14px"><strong>The capstone file</strong> · two contracts no room taught, worth 12 mastery each. The engagement closes only after you have made these two calls.</p>');
-  if(S.done.storm)card.insertAdjacentHTML('beforeend','<p style="margin-top:14px"><strong>Numbers drill</strong> · five quick questions on the numbers of this house, from the day-one CSM to the loss component. Practice only: nothing at stake.</p>');
+  const last=isLastDone();
+  if(last&&!S.capstoneDone)card.insertAdjacentHTML('beforeend','<p style="margin-top:14px"><strong>The capstone file</strong> · '+GAME.capstoneBlurb+'</p>');
+  if(last)card.insertAdjacentHTML('beforeend','<p style="margin-top:14px"><strong>Numbers drill</strong> · '+GAME.drill.libLine+'</p>');
   const f=el('div','mfoot');
-  if(S.done.storm){const dr=el('button','cta'+(startable?' ghost':''),'Numbers drill');dr.onclick=()=>{closeModal();runDrill();};f.append(dr);}
-  if(S.done.storm&&!S.capstoneDone){const cp=el('button','cta'+(startable?' ghost':' big'),'Open the capstone file');cp.onclick=()=>{closeModal();runCapstones();};f.append(cp);}
+  if(last){const dr=el('button','cta'+(startable?' ghost':''),'Numbers drill');dr.onclick=()=>{closeModal();runDrill();};f.append(dr);}
+  if(last&&!S.capstoneDone){const cp=el('button','cta'+(startable?' ghost':' big'),'Open the capstone file');cp.onclick=()=>{closeModal();runCapstones();};f.append(cp);}
   if(startable){const go=el('button','cta big','Start the retake');go.onclick=()=>{closeModal();runRetake(R);};f.append(go);}
   const b=el('button','cta','Close');b.onclick=closeModal;f.append(b);
   card.append(f);
   openModal(card,true);
 }
-/* ================= capstone: two unseen cases ================= */
-/* Transfer, not recall: nothing in the rooms walked through these two contracts.
+/* ---------- the capstone runner ---------- */
+/* Transfer, not recall: nothing in the scenes walked through these cases.
    Each is a scored quiz worth CAPSTONE_PTS; a miss files a finding like any other. */
+async function runCapstones(){
+  await new Promise(res=>{
+    const card=el('div','mcard');
+    card.append(el('div','qk','The capstone file'));
+    card.append(el('h4','',GAME.capstoneTitle));
+    card.insertAdjacentHTML('beforeend','<p>'+GAME.capstoneIntro+'</p>');
+    const f=el('div','mfoot');const b=el('button','cta big',CAPSTONES.length>1?'Open case 1':'Open the case');
+    b.onclick=()=>{closeModal();res();};f.append(b);card.append(f);
+    openModal(card,false);
+  });
+  setWhere(GAME.wherePrefix+'The capstone file');
+  for(const c of CAPSTONES){c.intro=c.ctx;await quiz(c,true);}
+  S.capstoneDone=1;save();
+  setWhere(GAME.where);
+  endOverlay();
+}
+/* ================= capstone: two unseen cases =================
+   The runner lives in shared/js/retake-flow.js; this is only the content. */
 const CAPSTONES=[
  {pts:CAPSTONE_PTS,kicker:'Capstone case 1 · the guarantee',
   ctx:'<div class="memo"><strong>Capstone file A · GuaranSave 95</strong><br>A premium of 1’000 buys units in the <b>Harbour Bond Fund</b>, named in the contract. The account is credited <b>90%</b> of the fund’s returns. At maturity the policyholder receives the <b>higher of the account and a guaranteed 1’050</b>. In the entity’s inception-date stochastic projection the guarantee bites in about <b>half of the probability-weighted scenarios</b>, and where it bites the payment does not move with the fund at all.</div>',
@@ -968,21 +1067,6 @@ const CAPSTONES=[
    {t:'OCI: hedges always park their offsets there',why:'This is not IFRS 9 hedge accounting. The B115 choice recognizes the mitigated financial-risk changes in P&L or IFIE; OCI only enters through the general finance-income disaggregation policy, not as a hedging parking lot.'}],
   cite:['B115','B116','B117–B118']},
 ];
-async function runCapstones(){
-  await new Promise(res=>{
-    const card=el('div','mcard');
-    card.append(el('div','qk','The capstone file'));
-    card.append(el('h4','','The final two cases'));
-    card.insertAdjacentHTML('beforeend','<p>The rooms tested what you had just learned. These final two cases test whether you can apply the same rules to something new: a contract with a substantial guarantee and a hedge against the financial risk in the fee. Get each one right on your first attempt to earn <strong>12 mastery points</strong>. Get it wrong and a finding is recorded, just like before, with another attempt available later. Take your time with the memos.</p>');
-    const f=el('div','mfoot');const b=el('button','cta big','Open case 1');b.onclick=()=>{closeModal();res();};f.append(b);card.append(f);
-    openModal(card,false);
-  });
-  setWhere('Mutual & Torres · The capstone file');
-  for(const c of CAPSTONES){c.intro=c.ctx;await quiz(c,true);}
-  S.capstoneDone=1;save();
-  setWhere('Learning Variable Fee Assurance in Mutual & Torres Assurance House');
-  endOverlay();
-}
 function quiz(o, scoring){
   /* resolves when correct + continue; a right answer on the FIRST try earns points
      (host hook `award(o.pts)`), a miss files a mistake and forfeits them */
@@ -1026,8 +1110,11 @@ function quiz(o, scoring){
 }
 
 /* ================= dialogue ================= */
+/* Six speaker slots, styled by .pv.<slot> in dialogue.css. Each game maps its
+   own cast onto them: SPEAKERS ties a slot to the figure kind that animates
+   while it talks, SPEAKER_TAGS is the two-or-three letter chip on the avatar. */
 function talk(sceneEl,lines){
-  const WHO={ph:'ana',act:'actuary',aud:'auditor',uw:'staff',you:'avatar'};
+  const WHO=SPEAKERS;
   const speak=w=>{sceneEl.querySelectorAll('.fig').forEach(f=>{
     f.dataset.state=(WHO[w]&&f.dataset.who===WHO[w])?'talk':'idle';});};
   return new Promise(res=>{
@@ -1038,7 +1125,7 @@ function talk(sceneEl,lines){
       const ln=lines[i];
       speak(ln.w);
       bar.innerHTML='';
-      bar.append(el('div','pv '+ln.w, {ph:'AS',act:'ACT',aud:'AUD',uw:'UW',you:'YOU',sys:'·'}[ln.w]||'·'));
+      bar.append(el('div','pv '+ln.w, SPEAKER_TAGS[ln.w]||'·'));
       const t=el('div','txt');
       if(ln.n)t.append(el('div','who',ln.n));
       t.append(el('p','',ln.t));bar.append(t);
@@ -1125,7 +1212,7 @@ function sceneShell(roomId,objectiveHTML){
   wrap.append(sc);
   stage.append(wrap);
   const top=el('div','scene-top');
-  const back=el('button','backbtn','← House map');
+  const back=el('button','backbtn',GAME.backLabel);
   back.onclick=()=>{closeModal();renderMap();};
   top.append(back);
   const obj=el('div','objective',objectiveHTML||'');
@@ -1167,6 +1254,82 @@ function bindHotspots(sc,handlers){
   setTimeout(refreshNext,0);
 }
 
+/* ================= navigation between scenes =================
+   A game is an ordered list of scenes unlocked one at a time. The host supplies
+   ROOM_ORDER (ids in order), ROOM_NAMES (id -> label) and ROOM_FNS (id -> the
+   function that renders that scene), plus GAME.wherePrefix and GAME.backLabel.
+   The map/line drawing itself belongs to the game; this is the bookkeeping.
+*/
+function unlockedCount(){
+  let n=1;
+  for(const id of ROOM_ORDER){if(S.done[id])n=Math.max(n,ROOM_ORDER.indexOf(id)+2);}
+  return Math.min(n,ROOM_ORDER.length);
+}
+function isLastDone(){return !!S.done[ROOM_ORDER[ROOM_ORDER.length-1]];}
+function enterRoom(id){
+  setWhere(GAME.wherePrefix+ROOM_NAMES[id]);
+  ROOM_FNS[id]();
+}
+function completeRoom(id){
+  if(S.progress&&S.progress[id])delete S.progress[id];
+  if(!S.done[id]){S.done[id]=true;save();}
+}
+/* the big button that takes a finished scene back to the map/line */
+function doorOut(sc,label){
+  const prev=sc.querySelector(':scope > .cta.big'); if(prev)prev.remove();
+  const b=el('button','cta big',label||GAME.backLabel.replace('← ','Back to the ')+' →');
+  b.style.cssText='position:absolute;left:50%;transform:translateX(-50%);bottom:16px;z-index:5';
+  b.onclick=()=>renderMap();
+  sc.append(b);
+}
+/* ================= shell: HUD wiring, theme, restart, phone tip =================
+   Everything in the top bar that is the same in every game on the kit. The host
+   supplies GAME.themeKey / GAME.tipKey and the restart copy, and calls
+   bootShell() after its own chunks have defined renderMap()/titleScreen().
+*/
+function restartGame(){
+  S=freshState();
+  save();ledgerFromState();renderChips();setAudit();
+  if(typeof onRestart==='function')onRestart();
+  closeModal();renderMap();
+}
+function bootShell(){
+  document.getElementById('dirBtn').onclick=()=>showDirectory();
+  document.getElementById('audit').onclick=()=>showAudit();
+  document.getElementById('audit').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showAudit();}};
+  document.getElementById('quizBtn').onclick=()=>showQuizLib();
+  document.getElementById('restartBtn').onclick=()=>{
+    const card=el('div','mcard');
+    card.append(el('div','qk','Restart'));
+    card.append(el('h4','','Start the game over?'));
+    card.insertAdjacentHTML('beforeend','<p>'+GAME.restartCopy+'</p>');
+    const f=el('div','mfoot');f.style.gap='10px';
+    const c=el('button','cta ghost','Cancel');c.onclick=closeModal;
+    const r=el('button','cta big','Restart');r.onclick=restartGame;
+    f.append(c,r);card.append(f);
+    openModal(card,true);
+  };
+  /* light is the default: these games are read in offices, on projectors */
+  let THEME=lsGet(GAME.themeKey)||'light';
+  applyTheme(THEME);
+  document.getElementById('themeBtn').onclick=()=>{
+    THEME=THEME==='light'?'dark':'light';
+    lsSet(GAME.themeKey,THEME);
+    applyTheme(THEME);
+  };
+  /* one-time phone tip: how to move through wide scenes on a small screen */
+  const mtip=document.getElementById('mobiletip');
+  if(mtip){
+    if(matchMedia('(max-width:740px)').matches&&!lsGet(GAME.tipKey))mtip.style.display='flex';
+    mtip.querySelector('button').onclick=()=>{mtip.style.display='none';lsSet(GAME.tipKey,'1');};
+  }
+  setAudit();renderChips();
+}
+function applyTheme(t){
+  if(t==='light')document.documentElement.dataset.theme='light';
+  else delete document.documentElement.dataset.theme;
+  document.getElementById('themeBtn').textContent=t==='light'?'☾ dark':'☀ light';
+}
 /* ================= title ================= */
 function titleScreen(){
   setWhere('Learning Variable Fee Assurance in Mutual & Torres Assurance House');clearStage();renderChips();
@@ -1350,27 +1513,10 @@ async function walkTo(id,sc){
   if(fg)fg.dataset.state='idle';
   await new Promise(r=>setTimeout(r,120));
 }
-
-function enterRoom(id){
-  setWhere('Mutual & Torres · '+ROOM_NAMES[id]);
-  ({lobby:roomLobby,underwriting:roomUnderwriting,studio:roomStudio,market:roomMarket,release:roomRelease,storm:roomStorm})[id]();
-}
-function completeRoom(id){
-  if(S.progress&&S.progress[id])delete S.progress[id];
-  if(!S.done[id]){S.done[id]=true;save();}
-}
-function doorOut(sc,label){
-  const prev=sc.querySelector(':scope > .cta.big'); if(prev)prev.remove();
-  const b=el('button','cta big',label||'Back to the map →');
-  b.style.cssText='position:absolute;left:50%;transform:translateX(-50%);bottom:16px;z-index:5';
-  b.onclick=()=>renderMap();
-  sc.append(b);
-}
-
 /* ================= ROOM: LOBBY ================= */
 async function roomLobby(){
   const fresh=!S.done.lobby;
-  const {sc,mount}=sceneShell('lobby', fresh?'Objective: <b>TALK at the desk · READ the poster & the guides</b>':'Room complete · replay freely');
+  const {sc,mount}=sceneShell('lobby', fresh?'Objective: <b>TALK at the desk · READ the guides & the poster</b>':'Room complete · replay freely');
   mount(`<svg viewBox="0 0 1200 640">
     <rect width="1200" height="640" fill="#141b26"/>
     <rect width="1200" height="470" fill="#1b2534"/>
@@ -1408,15 +1554,15 @@ async function roomLobby(){
     <g><rect x="150" y="380" width="120" height="90" rx="6" fill="#243347"/>
       <rect x="160" y="390" width="27" height="38" rx="2" fill="#31445e"/><rect x="196" y="390" width="27" height="38" rx="2" fill="#3a4a61"/><rect x="232" y="390" width="27" height="38" rx="2" fill="#31445e"/>
       <text x="210" y="452" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">GUIDES</text></g>
-    ${hotspot(935,130,'?','poster','','READ')}
-    ${hotspot(210,358,'?','brochures','q','READ')}
     ${hotspot(475,206,'!','ana','','TALK')}
+    ${hotspot(210,358,'?','brochures','q','READ')}
+    ${hotspot(935,130,'?','poster','','READ')}
   </svg>`);
   const P=prog('lobby');
   const hs={poster:!!P.poster,ana:!!P.ana,broch:!!P.broch};
   bindHotspots(sc,{
     poster:async(g)=>{
-      await teach('B101: the three conditions, word for word',
+      await teach('The variable-fee approach (B101): the three conditions, word for word',
         `<p>A contract has <strong>direct participation features</strong> only if, <em>at inception</em>, all three hold:</p>
          <p>(a) the terms specify the policyholder participates in a share of a <strong>clearly identified pool</strong> of underlying items;</p>
          <p>(b) the entity expects to pay the policyholder an amount equal to a <strong>substantial share of the fair-value returns</strong> on those items;</p>
@@ -1440,7 +1586,7 @@ async function roomLobby(){
     },
   });
   function check(){
-    if(fresh)setObjective('Objective: '+(hs.ana?'<b>✓ talked</b>':'<b>TALK at the desk</b>')+' · '+(hs.poster?'<b>✓ poster</b>':'<b>READ the B101 poster</b>')+' · '+(hs.broch?'<b>✓ guides</b>':'<b>READ the guides</b>'));
+    if(fresh)setObjective('Objective: '+(hs.ana?'<b>✓ talked</b>':'<b>TALK at the desk</b>')+' · '+(hs.broch?'<b>✓ guides</b>':'<b>READ the guides</b>')+' · '+(hs.poster?'<b>✓ poster</b>':'<b>READ the B101 poster</b>'));
     if(hs.poster&&hs.ana&&hs.broch){completeRoom('lobby');setObjective('Room complete ✓ · the underwriting office is unlocked');doorOut(sc);}
   }
   if(fresh&&(hs.poster||hs.ana||hs.broch)){
@@ -1469,7 +1615,7 @@ const FILES={
         {t:'At every reporting date',why:'That would make classification flip with markets. B102 fixes the assessment at inception.'},
         {t:'Whenever actual returns deviate from expectations',why:'Deviations are experience, not classification. The inception-date expectation is what counts (B102).'}],cite:['B102']}]},
   f2:{tag:'FILE 02 · TRADITIONAL',title:'SteadyGrowth 4%',
-    why:'Why it is on the desk: a product with features that look like participation. Read the terms to see what fails the test.',items:[
+    why:'Why it is on the desk: it is sold with the same brochure language as file 01. Read the terms and make your own call.',items:[
       'Premium goes into the entity’s <strong>general account</strong>',
       'Contract credits a <strong>fixed 4% per year</strong>, whatever markets do',
       'No asset pool is named anywhere in the contract'],
@@ -1498,7 +1644,7 @@ async function roomUnderwriting(){
     <rect y="465" width="1200" height="175" fill="#20293a"/>
     ${wallWindow(950,110,180,220,'#22344c')}
     <g><rect x="70" y="100" width="360" height="230" rx="6" fill="#2a2419" stroke="#4a3d22"/>
-      <text x="250" y="136" text-anchor="middle" font-family="var(--mono)" font-size="15" letter-spacing="2" fill="#d9a648">THE B101 TEST</text>
+      <text x="250" y="136" text-anchor="middle" font-family="var(--mono)" font-size="14" letter-spacing="1.5" fill="#d9a648">THE VARIABLE-FEE TEST (B101)</text>
       <text x="92" y="176" font-family="var(--sans)" font-size="16" fill="#a8996f">(a) identified pool, in the contract</text>
       <text x="92" y="210" font-family="var(--sans)" font-size="16" fill="#a8996f">(b) substantial share of FV returns</text>
       <text x="92" y="244" font-family="var(--sans)" font-size="16" fill="#a8996f">(c) payments vary with fair value</text>
@@ -1524,7 +1670,7 @@ async function roomUnderwriting(){
     await talk(sc,[
       {w:'sys',t:'The underwriting office. Every contract in the house starts here, with one question: which measurement model applies?'},
       {w:'uw',n:'Underwriter',t:'“You make the classification calls today. Three files on the desk. File 01 is the product Ana just asked for at reception. The other two sharpen your eye: a lookalike from the old shelf, and a question the reinsurance desk keeps asking.”'},
-      {w:'uw',n:'Underwriter',t:'“The test is on the wall. B101: an identified pool, a substantial share, payments that vary with it. All three, or it is not VFA. Open each file and make the call.”'},
+      {w:'uw',n:'Underwriter',t:'“The test is on the wall, the variable-fee test (B101): an identified pool, a substantial share, payments that vary with it. All three, or it is not VFA. Open each file and make the call.”'},
     ]);
     P.intro=1;save();
   }
@@ -1611,11 +1757,11 @@ async function roomStudio(){
     return {x,h,yTop,color,label,sub};
   }
   const BARS=[
-    bar(320,35,0,'#72b7cc','Fees','PV 35'),
+    bar(320,35,0,'#72b7cc','Entity share','fees, PV 35'),
     bar(430,-6,35,'#e06a5e','Claims','−6'),
     bar(540,-4,29,'#e06a5e','Expenses','−4'),
     bar(650,-5,25,'#b78bc9','RA','−5'),
-    bar(760,20,0,'#d9a648','Fee = CSM','= 20'),
+    bar(750,20,0,'#d9a648','Variable fee','= CSM 20'),
   ];
   let wfN=0;
   function growBar(i){
@@ -1636,7 +1782,7 @@ async function roomStudio(){
     if(boardStep>=3&&premiumDone&&rajarRead){
       if(fresh&&!P.paid){applyDeltas({account:1000,ra:5,csm:20});P.paid=1;save();}
       await talk(sc,[
-        {w:'act',n:'Chief actuary',t:'“Booked: pool 1’000, today all of it Ana’s account, risk adjustment 5, CSM 20, and not a cent of profit on day one. That 20 is a promise to earn, not a boast. Upstairs, the market decides how the promise ages.”'},
+        {w:'act',n:'Chief actuary',t:'“Booked: pool 1’000, today all of it Ana’s account, risk adjustment 5, CSM 20, and not a cent of profit on day one. That 20 is a promise to earn. Upstairs, the market decides how the promise ages.”'},
       ]);
       completeRoom('studio');renderChips();
       setObjective('Room complete ✓ · the market room is unlocked');
@@ -1645,7 +1791,7 @@ async function roomStudio(){
   }
   bindHotspots(sc,{
     rajar:async()=>{await teach('The jar marked RA',
-      `<p>The <strong>risk adjustment</strong> is the compensation the entity requires for bearing <em>non-financial</em> risk, here mostly mortality on the 5% excess benefit. It sits as its own liability component and releases to revenue as risk expires. One thing to hold on to: the RA is part of the <strong>fulfilment cash flows</strong>, so when B104 nets the fulfilment cash flows that do not vary with the pool off the entity’s share, the RA is netted with them: 35 − 10 − 5 = 20.</p>`,['37','81','B104']);rajarRead=true;P.rajar=1;save();updateObj();},
+      `<p>The <strong>risk adjustment</strong> is the compensation the entity requires for bearing <em>non-financial</em> risk, here mostly mortality on the 5% excess benefit. It sits as its own liability component and releases to revenue as risk expires. One thing to hold on to: the RA is part of the <strong>fulfilment cash flows</strong>, so when the variable-fee calculation (B104) nets the fulfilment cash flows that do not vary with the pool off the entity’s share, the RA is netted with them: 35 − 10 − 5 = 20.</p>`,['37','81','B104']);rajarRead=true;P.rajar=1;save();updateObj();},
     premium:async(g)=>{
       if(g.classList.contains('done'))return;
       await talk(sc,[
@@ -1669,7 +1815,7 @@ async function roomStudio(){
           {t:'1’000: the fair value of the pool itself',why:'The pool belongs to the measurement, but the <em>entity’s share</em> of it is only the fee stream. The rest is Ana’s.'}],cite:['B104(b)(i)']},fresh);
         growBar(0);boardStep=1;P.board=1;save();updateObj();
       } else if(boardStep===1){
-        await quiz({kicker:'Chalkboard · step 2',intro:MEMO,q:'B104: variable fee = entity’s share of the pool’s FV, less fulfilment cashflows that do not vary with the pool. Fulfilment cashflows include the risk adjustment. So the variable fee is…',options:[
+        await quiz({kicker:'Chalkboard · step 2',intro:MEMO,q:'The variable-fee formula (B104): variable fee = the entity’s share of the pool’s FV, less the fulfilment cash flows that do not vary with the pool. Fulfilment cash flows include the risk adjustment. So the variable fee is…',options:[
           {t:'20: that is, 35 − (6 + 4) − 5',ok:true,why:'Excess death claims (<span class="num">6</span>) and attributable expenses (<span class="num">4</span>) are promised whatever the fund does, and the <strong>fulfilment cash flows include the risk adjustment</strong> (<span class="num">5</span>), which does not vary with the pool either. Net all of them off the entity’s share: <span class="num">35 − 10 − 5 = 20</span>.'},
           {t:'25: that is, 35 − (6 + 4)',why:'Close, but the fulfilment cash flows <em>include the risk adjustment</em>, and it does not vary with the pool. B104 nets it off with the claims and expenses: the variable fee is 20, not 25.'},
           {t:'30: 35 minus the risk adjustment',why:'The RA comes off, but so do the other non-varying fulfilment cashflows: the 6 and the 4. All of them together: 35 − 15 = 20.'}],cite:['B104']},fresh);
@@ -1822,7 +1968,7 @@ async function roomMarket(){
     setObjective('Room complete ✓ · the release desk is unlocked');
     doorOut(sc);
   }
-  bindHotspots(sc,{plaque:async()=>{await teach('The sign above the chart: GMM vs VFA in one row',
+  bindHotspots(sc,{plaque:async()=>{await teach('GMM vs VFA in one chart',
     `<p>Same 12% year, two worlds. <strong>GMM:</strong> the CSM accretes interest at rates locked in at inception; changes arising from financial risk generally do not adjust the CSM and are presented as insurance finance income/expense, in P&amp;L or split with OCI by policy choice. <strong>VFA:</strong> the CSM accretes nothing, instead the <em>entity’s share of pool performance</em> resizes it (paragraph 45(b)), and even financial effects on the non-varying cashflows follow (B113(b)), unless the documented risk-mitigation option of B115–B118 is used. The variable fee is a stake in the pool, and the CSM is where that stake lives until earned.</p>`,['45(b)','B112','B113(b)','B115–B118']);plaqueRead=true;P.plaque=1;save();if(doneN>=EVENTS.length)await finish();}});
   if(fresh){
     if(P.plaque){const g=[...sc.querySelectorAll('.hs')].find(h=>h.dataset.hs==='plaque');if(g)g.classList.add('done');}
@@ -2013,7 +2159,7 @@ async function roomStorm(){
         sc.querySelector('.rain').style.display='none';
         await talk(sc,[
           {w:'sys',t:'The rain thins. Maturity: Ana takes her account, smaller than she hoped, exactly as the contract promised. The payout is an investment component: it never touches revenue (paragraph 85). Two last movements close the books. The remaining risk adjustment of 2.5 releases as year-two risk expires, into insurance revenue and P&L (paragraph 81, B124). And the loss component runs off with the final service: excluded from revenue, offset in service expenses, net nil, because that loss was already booked the day the storm hit (paragraph 50–52).'},
-          {w:'ph',n:'Ana Silva',t:'“Down years included, you told me where every number would go before it went there. All right. Your fee was fair.”'},
+          {w:'ph',n:'Ana Silva',t:'“You always explained my account movements and accounting treatment. I didn’t like taking the losses but all right. Your fee was fair.”'},
         ]);
         sc.querySelectorAll('.fig').forEach(f=>f.dataset.state='celebrate');
         if(fresh){L={...CHECK.storm};renderChips();}
@@ -2073,42 +2219,10 @@ function endOverlay(){
   save();
 }
 /* ================= boot ================= */
-document.getElementById('dirBtn').onclick=()=>showDirectory();
-document.getElementById('audit').onclick=()=>showAudit();
-document.getElementById('audit').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showAudit();}};
-document.getElementById('quizBtn').onclick=()=>showQuizLib();
-function restartGame(){
-  S={done:{},score:0,started:true,progress:{},mistakes:[]};
-  save();ledgerFromState();renderChips();setAudit();avatarAt='lobby';closeModal();renderMap();
-}
-document.getElementById('restartBtn').onclick=()=>{
-  const card=el('div','mcard');
-  card.append(el('div','qk','Restart'));
-  card.append(el('h4','','Start the game over?'));
-  card.insertAdjacentHTML('beforeend','<p>All room progress, the ledger and the audit file will reset. Your theme choice stays.</p>');
-  const f=el('div','mfoot');f.style.gap='10px';
-  const c=el('button','cta ghost','Cancel');c.onclick=closeModal;
-  const r=el('button','cta big','Restart');r.onclick=restartGame;
-  f.append(c,r);card.append(f);
-  openModal(card,true);
-};
-const THEME_KEY='vfa-theme';
-function applyTheme(t){
-  if(t==='light')document.documentElement.dataset.theme='light';
-  else delete document.documentElement.dataset.theme;
-  document.getElementById('themeBtn').textContent=t==='light'?'☾ dark':'☀ light';
-}
-let THEME=localStorage.getItem(THEME_KEY)||'light';
-applyTheme(THEME);
-document.getElementById('themeBtn').onclick=()=>{THEME=THEME==='light'?'dark':'light';try{localStorage.setItem(THEME_KEY,THEME);}catch(e){}applyTheme(THEME);};
-/* one-time phone tip: how to move through wide rooms on a small screen */
-const mtip=document.getElementById('mobiletip');
-if(mtip){
-  const MTIP_KEY='vfa-mobiletip';
-  if(matchMedia('(max-width:740px)').matches&&!localStorage.getItem(MTIP_KEY))mtip.style.display='flex';
-  mtip.querySelector('button').onclick=()=>{mtip.style.display='none';try{localStorage.setItem(MTIP_KEY,'1');}catch(e){}};
-}
-setAudit();renderChips();
+const ROOM_FNS={lobby:roomLobby,underwriting:roomUnderwriting,studio:roomStudio,
+                market:roomMarket,release:roomRelease,storm:roomStorm};
+function onRestart(){avatarAt='lobby';}
+bootShell();
 /* a run is only finished once the capstone file is closed too */
 if(S.started&&Object.keys(S.done).length>0&&!(S.done.storm&&S.capstoneDone)){renderMap();}
 else titleScreen();
