@@ -2207,7 +2207,7 @@ async function roomStorm(){
   let step=P.step||0, lcnoteRead=(!fresh)||!!P.note, crashDone=step>=3;
   const maybeEnd=()=>{ if(!(crashDone&&lcnoteRead)||S.done.storm)return; completeRoom('storm'); endOverlay(); };
   bindHotspots(sc,{
-    lcnote:async()=>{await teach('The pinned note: what a loss component is',
+    lcnote:async()=>{await teach('When to book a loss',
       `<p><strong>1 · The loss is booked once.</strong> The CSM cannot go below zero. When bad news exceeds the CSM, the excess is a loss. That loss goes to P&amp;L immediately (paragraph 47-48). It is not spread over time.</p>
        <p><strong>2 · The loss component is a memo of that loss.</strong> It sits inside the liability for remaining coverage. It records how much future service the booked loss has already paid for. It is not an extra provision.</p>
        <p><strong>3 · Good news reverses it first.</strong> A favourable future-service change reduces the loss component before it rebuilds any CSM (paragraph 50(b)). The reversal is a credit in P&amp;L.</p>
