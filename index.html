@@ -1100,11 +1100,13 @@ function showQuizLib(){
   if(!R.length){
     card.append(el('h4','','Nothing to retake'));
     if(S.mistakes.length)card.insertAdjacentHTML('beforeend','<p class="fl">All findings cleared. Case mastery stands at '+S.score+'/100.</p>');
-    else card.insertAdjacentHTML('beforeend','<p>No missed questions on file. Miss one and it lands here for a retake.</p>');
+    else card.insertAdjacentHTML('beforeend','<p>You have not answered any question wrongly so far. If you miss one, it appears here for a retake.</p>');
   } else {
     startable=true;
     card.append(el('h4','','Retake what you missed'));
-    card.insertAdjacentHTML('beforeend','<p>Only the questions you got wrong are in here, '+R.length+' of them. Answer '+(R.length>1?'them all':'it')+' right in one sitting and the mastery '+(R.length>1?'they carry':'it carries')+' is earned back. One miss ends the attempt, with nothing extra lost.</p>');
+    card.insertAdjacentHTML('beforeend','<p>'+(R.length>1
+      ?'These are the '+R.length+' questions you answered wrongly during the game, listed below. Retake them to earn the mastery points you missed: answer all of them correctly in one attempt, and the points are added to your score. If you get one wrong, the attempt ends. You lose nothing, and you can try again anytime.'
+      :'This is the question you answered wrongly during the game, listed below. Retake it to earn the mastery points you missed: answer it correctly, and the points are added to your score. If you get it wrong, the attempt ends. You lose nothing, and you can try again anytime.')+'</p>');
     R.forEach((r,i)=>card.insertAdjacentHTML('beforeend',`<div class="finding"><div class="fhead">${i+1} · ${r.w}${r.k?' · '+r.k:''}</div><p class="fq">${r.q}</p></div>`));
   }
   const last=isLastDone();
