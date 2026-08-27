@@ -1076,6 +1076,7 @@ async function runDrillCore(){
 async function runDrill(){
   const done=await runDrillCore();
   if(!done)return;
+  S.drillDone=1;save(); /* a finished drill stops being pitched at the end card */
   if(S.drillDue){finishRetake();return;}
   const card=el('div','mcard');
   card.append(el('div','qk','Numbers drill'));
@@ -2334,7 +2335,7 @@ function endOverlay(){
   const R=(!S.drillDue)?retakeList():[];
   if(R.length)card.insertAdjacentHTML('beforeend','<p class="fy">The auditor offers a retake: answer the '+R.length+' question'+(R.length>1?'s':'')+' you missed, all right in one sitting, then walk through the numbers drill, and the mastery those findings carry, '+R.reduce((t,r)=>t+(r.p||QUESTION_PTS),0)+' points, is earned back.</p>');
   if(S.drillDue)card.insertAdjacentHTML('beforeend','<p class="fy">Your retake is cleared. One step left: finish the numbers drill, nothing at stake, and the mastery your findings carried comes back.</p>');
-  if(!R.length&&!S.drillDue)card.insertAdjacentHTML('beforeend','<p class="fy"><strong>One thing left to try: the numbers drill</strong>, '+GAME.drill.libLine+'</p>');
+  if(!R.length&&!S.drillDue&&!S.drillDone)card.insertAdjacentHTML('beforeend','<p class="fy"><strong>One thing left to try: the numbers drill</strong>, '+GAME.drill.libLine+'</p>');
   if(S.score>=100)card.insertAdjacentHTML('beforeend','<p class="fy">Before you go: click any number in the top bar, Pool, RA, CSM or P&amp;L, to see its whole story as a roll-forward and waterfall.</p>');
   const f=el('div','mfoot');
   const again=el('button','cta ghost','Play again');
@@ -2342,7 +2343,7 @@ function endOverlay(){
   const map=el('button','cta'+(R.length?'':' big'),'Back to the house');
   map.onclick=()=>{closeModal();renderMap();};
   f.append(again,map);
-  if(!R.length&&!S.drillDue){const dr=el('button','cta','Numbers drill');dr.onclick=()=>{closeModal();runDrill();};f.append(dr);}
+  if(!R.length&&!S.drillDue&&!S.drillDone){const dr=el('button','cta','Numbers drill');dr.onclick=()=>{closeModal();runDrill();};f.append(dr);}
   if(R.length){const rt=el('button','cta big','Retake what you missed');rt.onclick=()=>{closeModal();runRetake(R);};f.append(rt);}
   if(S.drillDue){const dd=el('button','cta big','Finish the numbers drill');dd.onclick=()=>{closeModal();runDrill();};f.append(dd);}
   card.append(f);
