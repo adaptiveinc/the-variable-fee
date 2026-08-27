@@ -1872,9 +1872,9 @@ async function roomStudio(){
         {w:'ph',n:'Ana Silva',t:'“Here’s the 1’000. Before you take it upstairs, does my premium count as your revenue now?”'},
       ]);
       await quiz({kicker:'Presentation check',q:'The 1’000 premium: how much of it is insurance revenue?',options:[
-        {t:'None of it: receiving cash is not service',ok:true,why:'No revenue arises when the premium is received; the cash lands on the balance sheet. And the <strong>account balance</strong>, the amount repayable to Ana in all circumstances, is an <strong>investment component</strong> that paragraph 85 keeps out of insurance revenue and expenses, forever. IFRS 17 revenue is earned from service, not collected from premiums.'},
-        {t:'All 1’000: premiums are revenue',why:'That was IFRS 4. Under IFRS 17 the premium lands on the balance sheet; revenue is earned over time, and never from the investment component (paragraph 85).'},
-        {t:'200: the entity’s 20% share',why:'The fee is earned over the contract’s life through the CSM machinery, not on day one. And the account itself is excluded from revenue outright (paragraph 85).'}],cite:['85']},fresh);
+        {t:'None of it: receiving cash is not service',ok:true,why:'Receiving the premium creates no revenue: the cash goes onto the balance sheet as a liability to Ana. Her account balance is an <strong>investment component</strong>, an amount she gets back in any case, and paragraph 85 keeps investment components out of insurance revenue and expenses. Under IFRS 17, revenue comes from providing service, not from collecting premiums.'},
+        {t:'All 1’000: premiums are revenue',why:'That was how IFRS 4 worked. Under IFRS 17 the premium goes onto the balance sheet, and revenue is earned over time as you provide service. The investment component never becomes revenue (paragraph 85).'},
+        {t:'200: the entity’s 20% share',why:'The fee becomes revenue only over the life of the contract, as the CSM is released. Nothing is earned on day one, and the account balance itself never becomes revenue (paragraph 85).'}],cite:['85']},fresh);
       g.classList.add('done');premiumDone=true;P.premium=1;save();updateObj();
     },
     board:async(g)=>{
