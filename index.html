@@ -733,8 +733,9 @@ function callout(target,html,ms){
   const center=target.offsetLeft+target.offsetWidth/2;
   c.style.right=Math.max(8,hud.clientWidth-center-52)+'px';
   const kill=()=>c.remove();
-  c.onclick=kill;
-  setTimeout(kill,ms||14000);
+  /* ms 0 = sticky: it stays until the × is clicked, for popups that state a goal */
+  if(ms===0){c.onclick=e=>{if(e.target.closest('.bc-x'))kill();};}
+  else{c.onclick=kill;setTimeout(kill,ms||14000);}
   return c;
 }
 function setWhere(t){document.getElementById('whereLabel').textContent=t;}
@@ -1563,7 +1564,9 @@ function renderMap(){
     qb.classList.toggle('urge',capstonePending);
     if(capstonePending&&!S.seenCapstoneHint){
       S.seenCapstoneHint=1;save();
-      callout(qb,'<b>One step left: the capstone file.</b>All six rooms are done. Open ✎ quiz to take the two final cases, worth 12 mastery points each, and close the engagement.',15000);
+      /* sticky (ms 0): the goal stays on screen until dismissed, or until the quiz button is clicked */
+      const c=callout(qb,'<b>One step left: the capstone file.</b>All six rooms are done. Open ✎ quiz to take the two final cases, worth 12 mastery points each, and close the engagement.',0);
+      if(c)qb.addEventListener('click',()=>c.remove(),{once:true});
     }
   }
 
