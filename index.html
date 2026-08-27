@@ -566,7 +566,7 @@
 
 <div id="hud">
   <span class="brand">The <em>Variable</em> Fee</span>
-  <span class="where" id="whereLabel">Learning Variable Fee Assurance in Mutual & Torres Assurance House</span>
+  <span class="where" id="whereLabel">Learning Variable Fee Assurance in Clearbook Assurance House</span>
   <button id="dirBtn" class="dirbtn" title="Building directory: the paragraphs behind each room">ⓘ directory</button>
   <button id="themeBtn" class="dirbtn" title="Switch between light and dark mode">☀ light</button>
   <button id="restartBtn" class="dirbtn" title="Restart the game from the beginning">↺ restart</button>
@@ -589,8 +589,8 @@ const GAME={
   tipKey:'vfa-mobiletip',
   /* mastery economy: 19 room questions x 4 + 2 capstone cases x 12 = 100 */
   questionPts:4, capstonePts:12,
-  where:'Learning Variable Fee Assurance in Mutual & Torres Assurance House',
-  wherePrefix:'Mutual & Torres · ',
+  where:'Learning Variable Fee Assurance in Clearbook Assurance House',
+  wherePrefix:'Clearbook · ',
   backLabel:'← House map',
   restartCopy:'All room progress, the ledger and the audit file will reset. Your theme choice stays.',
   ledgerOpen:()=>!(L.account===0&&L.csm===0&&!S.done.studio),
@@ -1150,7 +1150,7 @@ const CAPSTONES=[
    {t:'VFA in the scenarios where the guarantee stays out of the money, GMM in the rest',why:'Classification is one whole-contract call, made once at inception on probability-weighted expectations (B102, B107). A contract does not switch models scenario by scenario, or year by year.'}],
   cite:['B101(c)','B107–B108','B102']},
  {pts:CAPSTONE_PTS,kicker:'Capstone case 2 · the hedge',
-  ctx:'<div class="memo"><strong>Capstone file B · the CFO’s swaps</strong><br>Mutual &amp; Torres’ VFA book carries promises that do not vary with the pool, and falling interest rates raise their present value at the fee’s expense. The CFO buys <b>interest-rate swaps</b> against that risk. The <b>risk-management objective and strategy were documented before hedging began</b>, meeting B116. This year rates fall: the swaps gain <b>+3.0</b> and the financial-risk change on the non-varying fulfilment cash flows is <b>−3.0</b>.</div>',
+  ctx:'<div class="memo"><strong>Capstone file B · the CFO’s swaps</strong><br>Clearbook’s VFA book carries promises that do not vary with the pool, and falling interest rates raise their present value at the fee’s expense. The CFO buys <b>interest-rate swaps</b> against that risk. The <b>risk-management objective and strategy were documented before hedging began</b>, meeting B116. This year rates fall: the swaps gain <b>+3.0</b> and the financial-risk change on the non-varying fulfilment cash flows is <b>−3.0</b>.</div>',
   q:'Under the VFA, where may the −3.0 financial-risk change go?',options:[
    {t:'P&L (or IFIE), by the documented risk-mitigation choice, meeting the swap gains there',ok:true,why:'B113(b) would send the −3.0 into the CSM, but B115 provides the exception: with the B116 documentation in place, the entity <strong>may choose not to adjust the CSM</strong> for the financial-risk changes the swaps mitigate, recognizing them in profit or loss (or insurance finance income/expense) instead. There the −3.0 meets the +3.0 on the swaps and the books show the hedge doing its job, rather than a one-sided gain in P&L against a quiet CSM. The choice applies prospectively, and stops if the conditions lapse (B117–B118).'},
    {t:'CSM: B113(b) is absolute under the VFA',why:'B113(b) is the rule and B115–B118 the documented exception. With the B116 conditions met, forcing the −3.0 into the CSM while the swap gain of +3.0 sits in P&L would show accounting noise where the economics show a working hedge.'},
@@ -1424,7 +1424,7 @@ function applyTheme(t){
 }
 /* ================= title ================= */
 function titleScreen(){
-  setWhere('Learning Variable Fee Assurance in Mutual & Torres Assurance House');clearStage();renderChips();
+  setWhere('Learning Variable Fee Assurance in Clearbook Assurance House');clearStage();renderChips();
   const h=el('div','hero fadein');
   h.append(el('div','kicker','An IFRS 17 adventure'));
   h.append(el('h1','','Walk into the house.<br>Play the <em>variable fee</em>.'));
@@ -1506,7 +1506,7 @@ const ICONS={
 };
 
 function renderMap(){
-  setWhere('Learning Variable Fee Assurance in Mutual & Torres Assurance House');clearStage();renderChips();
+  setWhere('Learning Variable Fee Assurance in Clearbook Assurance House');clearStage();renderChips();
   const unlocked=unlockedCount();
   const nextId=ROOM_ORDER[unlocked-1];
   const showThought=!S.done.storm&&nextId&&!S.done[nextId];
@@ -1545,7 +1545,7 @@ function renderMap(){
     <text x="500" y="88" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="3" fill="#5d6b7e">LIFT</text>
     ${rooms}
     <rect x="40" y="720" width="920" height="24" fill="#0d1420"/>
-    <text x="500" y="737" text-anchor="middle" font-family="var(--serif)" font-size="13" letter-spacing="4" fill="#8b98aa">MUTUAL &amp; TORRES · ASSURANCE HOUSE</text>
+    <text x="500" y="737" text-anchor="middle" font-family="var(--serif)" font-size="13" letter-spacing="4" fill="#8b98aa">CLEARBOOK · ASSURANCE HOUSE</text>
     <g id="avatar" style="transform:translate(${MAP_POS[avatarAt].x}px,${MAP_POS[avatarAt].y-84}px)">${'' /* anchor at head-top; person drawn at local 0,0 */}
       ${person(0,0,0.85,'#d9a648','#6b5222')}${thought}
     </g>
@@ -1629,7 +1629,7 @@ async function roomLobby(){
     <rect y="470" width="1200" height="170" fill="#232c3a"/>
     <rect y="462" width="1200" height="8" fill="#12192455"/>
     ${wallWindow(80,110,190,230,'#27374e')}
-    <text x="600" y="128" text-anchor="middle" font-family="var(--serif)" font-size="26" letter-spacing="6" fill="#c9b06b">MUTUAL &amp; TORRES</text>
+    <text x="600" y="128" text-anchor="middle" font-family="var(--serif)" font-size="26" letter-spacing="6" fill="#c9b06b">CLEARBOOK</text>
     <text x="600" y="152" text-anchor="middle" font-family="var(--mono)" font-size="12" letter-spacing="5" fill="#5d6b7e">ASSURANCE HOUSE · EST. 2023</text>
     <g><rect x="860" y="150" width="150" height="200" rx="6" fill="#202b3c" stroke="#2c394a"/>
       <text x="935" y="180" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="#d9a648" letter-spacing="1">IFRS 17 · B101</text>
@@ -1682,11 +1682,11 @@ async function roomLobby(){
        <p>Under the <strong>variable-fee approach (VFA)</strong>, the insurer's profit is a fee taken from a pool it manages for the policyholder. The entity's share of the pool's performance, and financial effects on the rest, resize the unearned profit (the CSM) instead.</p>`,['B101','B104']);hs.broch=true;P.broch=1;save();check();},
     ana:async(g)=>{
       await talk(sc,[
-        {w:'sys',t:'The doors sigh open and the two of you cross the lobby together: Ana, a client with the stride of someone who reads footnotes, and you, the Mutual &amp; Torres representative on her case.'},
+        {w:'sys',t:'The doors sigh open and the two of you cross the lobby together: Ana, a client with the stride of someone who reads footnotes, and you, the Clearbook representative on her case.'},
         {w:'ph',n:'Ana Silva · client',t:'“I have 1’000 to invest. I want it in a real fund I can see, moving with the market, and I want life cover on top. What I don’t want is a black box.”'},
         {w:'act',n:'Receptionist',t:'“Then you want the underwriting office, first door on the right. They decide what kind of contract this is, and which accounting model applies.”'},
         {w:'ph',n:'Ana Silva',t:'“Accounting model? I just want my fund.”'},
-        {w:'you',n:'You · Mutual & Torres',t:'“OK, I’ll take it from here. Underwriting first, then up through the house, and I’ll show you where every number goes before it goes there.”'},
+        {w:'you',n:'You · Clearbook',t:'“OK, I’ll take it from here. Underwriting first, then up through the house, and I’ll show you where every number goes before it goes there.”'},
         {w:'sys',t:'The accounting model, as you are about to learn, is decided by exactly what Ana just asked for.'},
       ]);
       g.classList.add('done');hs.ana=true;P.ana=1;save();check();
