@@ -1110,7 +1110,12 @@ function showQuizLib(){
     R.forEach((r,i)=>card.insertAdjacentHTML('beforeend',`<div class="finding"><div class="fhead">${i+1} · ${r.w}${r.k?' · '+r.k:''}</div><p class="fq">${r.q}</p></div>`));
   }
   const last=isLastDone();
-  if(last&&!S.capstoneDone)card.insertAdjacentHTML('beforeend','<p style="margin-top:14px"><strong>The capstone file</strong> · '+GAME.capstoneBlurb+'</p>');
+  if(last&&!S.capstoneDone){
+    const done=capstonesClosed(), left=CAPSTONES.length-done;
+    card.insertAdjacentHTML('beforeend','<p style="margin-top:14px"><strong>The capstone file</strong> · '+(done
+      ?done+' of the '+CAPSTONES.length+' cases is closed. '+left+' call'+(left>1?'s':'')+' left, worth '+CAPSTONE_PTS+' mastery points'+(left>1?' each':'')+', and the engagement closes.'
+      :GAME.capstoneBlurb)+'</p>');
+  }
   if(last)card.insertAdjacentHTML('beforeend','<p style="margin-top:14px"><strong>Numbers drill</strong> · '+GAME.drill.libLine+'</p>');
   const f=el('div','mfoot');
   if(last){const dr=el('button','cta'+(startable?' ghost':''),'Numbers drill');dr.onclick=()=>{closeModal();runDrill();};f.append(dr);}
@@ -1123,8 +1128,19 @@ function showQuizLib(){
 /* ---------- the capstone runner ---------- */
 /* Transfer, not recall: nothing in the scenes walked through these cases.
    Each is a scored quiz worth CAPSTONE_PTS; a miss files a finding like any other. */
+function capstonesClosed(){
+  /* resume-safe progress through the capstone file. Older saves have no counter:
+     infer closed cases from the score, since room points can never exceed
+     100 minus the capstone points (the economy always sums to 100). */
+  if(S.capstoneN==null){
+    const roomMax=100-CAPSTONES.length*CAPSTONE_PTS;
+    S.capstoneN=Math.max(0,Math.min(CAPSTONES.length,Math.ceil((S.score-roomMax)/CAPSTONE_PTS)));
+    save();
+  }
+  return S.capstoneN;
+}
 async function runCapstones(){
-  await new Promise(res=>{
+  if(capstonesClosed()===0)await new Promise(res=>{
     const card=el('div','mcard');
     card.append(el('div','qk','The capstone file'));
     card.append(el('h4','',GAME.capstoneTitle));
@@ -1134,7 +1150,11 @@ async function runCapstones(){
     openModal(card,false);
   });
   setWhere(GAME.wherePrefix+'The capstone file');
-  for(const c of CAPSTONES){c.intro=c.ctx;await quiz(c,true);}
+  while(S.capstoneN<CAPSTONES.length){
+    const c=CAPSTONES[S.capstoneN];c.intro=c.ctx;
+    await quiz(c,true);
+    S.capstoneN++;save();
+  }
   S.capstoneDone=1;save();
   setWhere(GAME.where);
   endOverlay();
@@ -2294,7 +2314,9 @@ function endOverlay(){
     const card=el('div','mcard');
     card.append(el('div','qk','Engagement almost closed · case mastery '+S.score+'/100'));
     card.append(el('div','grade','Last thing: the capstone file.'));
-    card.insertAdjacentHTML('beforeend','<p>You made it through six rooms, each testing what you had just learned. For the final challenge, the auditor hands you <strong>two contracts you have not seen before</strong>: one with a substantial guarantee and one with a documented hedge. Make two calls, worth 12 mastery points each, to close the engagement.</p>');
+    card.insertAdjacentHTML('beforeend',capstonesClosed()
+      ?'<p>One of the two capstone cases is already closed. One call is left, worth <strong>12 mastery points</strong>, and then the engagement closes.</p>'
+      :'<p>You made it through six rooms, each testing what you had just learned. For the final challenge, the auditor hands you <strong>two contracts you have not seen before</strong>: one with a substantial guarantee and one with a documented hedge. Make two calls, worth 12 mastery points each, to close the engagement.</p>');
     const f=el('div','mfoot');
     const later=el('button','cta ghost','Back to the house');later.onclick=()=>{closeModal();renderMap();};
     const go=el('button','cta big','Open the capstone file');go.onclick=()=>{closeModal();runCapstones();};
