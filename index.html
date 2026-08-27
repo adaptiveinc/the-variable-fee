@@ -766,17 +766,30 @@ function renderChips(){
   });
 }
 function showBooksCallout(){
-  if(S.seenBooks)return;
+  if(S.seenBooks)return false;
   const chips=document.getElementById('ledgerchips');
-  if(!chips||!chips.children.length)return;
+  if(!chips||!chips.children.length)return false;
   S.seenBooks=1;save();
   callout(chips,GAME.booksCallout,14000);
+  return true;
+}
+/* every later booking confirms itself: a short popup naming the accounts that moved */
+function booksToast(d){
+  const chips=document.getElementById('ledgerchips');
+  if(!chips||!chips.children.length)return;
+  const parts=LEDGER_CHIPS.filter(c=>d[c.k]).map(c=>{
+    const v=d[c.k];
+    return c.label+' '+(v>0?'+':'−')+(c.dp===2?fmt2:fmt)(Math.abs(v));
+  });
+  if(!parts.length)return;
+  document.querySelectorAll('.books-callout').forEach(c=>c.remove());
+  callout(chips,'<b>Your accounts just updated.</b>'+parts.join(' · '),5000);
 }
 function applyDeltas(d,force){
   if(!d)return;
   for(const k in d)L[k]=Math.round((L[k]+d[k])*100)/100;
   renderChips();
-  showBooksCallout();
+  if(!showBooksCallout())booksToast(d);
   for(const k in d){const e=document.getElementById('chip-'+k); if(e)e.classList.add('flash');}
 }
 /* ================= this house's books ================= */
@@ -1986,7 +1999,7 @@ async function roomMarket(){
     <text x="1120" y="586" text-anchor="middle" font-family="var(--mono)" font-size="11" letter-spacing="2" fill="#5d6b7e">TRADER</text>
     <g><rect x="320" y="36" width="150" height="46" rx="6" fill="#182234" stroke="#3b4a5f"/>
       <text x="395" y="56" text-anchor="middle" font-family="var(--mono)" font-size="12" letter-spacing="2" fill="#8b98aa">GMM vs VFA</text>
-      <text x="395" y="72" text-anchor="middle" font-family="var(--sans)" font-size="11" fill="#5d6b7e">same year, two worlds</text></g>
+      <text x="395" y="72" text-anchor="middle" font-family="var(--sans)" font-size="11" fill="#5d6b7e">the same year, booked two ways</text></g>
     ${hotspot(492,60,'?','plaque','q','READ')}
   </svg>`);
   /* event buttons appear one at a time on the desk row */
