@@ -67,6 +67,9 @@
   .troom{color:var(--faint);font-size:11px}
 
   .chip:focus-visible,#audit:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:5px}
+  /* the quiz button flashes while the capstone file is the pending next step */
+  #quizBtn.urge{animation:nextflash 1.2s ease-in-out infinite;border-color:#d9a64888}
+  @media(prefers-reduced-motion:reduce){#quizBtn.urge{animation:none;background:var(--gold-dim)}}
   /* ---------------- stage ---------------- */
   #stage{max-width:1150px;margin:0 auto;padding:14px 14px 60px}
   .fadein{animation:fade .5s ease}
@@ -1551,6 +1554,18 @@ function renderMap(){
     'Click a lit room to walk there, the thought bubble says where to go next. Paragraph directory: ⓘ in the top bar.';
   wrap.append(hint);
   stage.append(wrap);
+
+  /* after the last room, the quiz button is the way forward: flash it while
+     the capstone file is pending, and say so once with a popup */
+  const qb=document.getElementById('quizBtn');
+  if(qb){
+    const capstonePending=!!(S.done.storm&&!S.capstoneDone);
+    qb.classList.toggle('urge',capstonePending);
+    if(capstonePending&&!S.seenCapstoneHint){
+      S.seenCapstoneHint=1;save();
+      callout(qb,'<b>One step left: the capstone file.</b>All six rooms are done. Open ✎ quiz to take the two final cases, worth 12 mastery points each, and close the engagement.',15000);
+    }
+  }
 
   sc.querySelectorAll('.room-g').forEach(g=>{
     const go=async()=>{
