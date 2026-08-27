@@ -998,7 +998,7 @@ function examQuiz(o,idx,total,drill){
           card.append(el('div','verdict good','<strong>Correct.</strong> '+(op.why||'')
             +(o.cite?'<div>'+o.cite.map(citeChip).join('')+'</div>':'')));
           const f=el('div','mfoot');const c=el('button','cta big',idx<total?'Next question':'Finish');
-          c.onclick=()=>{closeModal();res(true);};f.append(c);card.append(f);
+          c.onclick=()=>{closeModal();res(drill?'right':true);};f.append(c);card.append(f);
           c.scrollIntoView({block:'nearest'});
         }else{
           b.classList.add('wrong');
@@ -1006,7 +1006,7 @@ function examQuiz(o,idx,total,drill){
             const co=o.options.find(x=>x.ok)||{};
             card.append(el('div','verdict bad','<strong>Not quite.</strong> '+(op.why||'')+' The right call: <strong>'+co.t+'</strong>. <em>Practice only, no penalty.</em>'));
             const f=el('div','mfoot');const c=el('button','cta big',idx<total?'Next question':'Finish');
-            c.onclick=()=>{closeModal();res(true);};f.append(c);card.append(f);
+            c.onclick=()=>{closeModal();res('wrong');};f.append(c);card.append(f);
           } else {
             card.append(el('div','verdict bad','<strong>Not this time.</strong> '+(op.why||'')+' <em>One miss ends the retake. The findings stay open; come back whenever you are ready.</em>'));
             const f=el('div','mfoot');const c=el('button','cta big','Back to the game');
@@ -1070,19 +1070,30 @@ async function runRetake(R){
   await runDrill();
 }
 async function runDrillCore(){
-  for(let i=0;i<NUMQ.length;i++){const cont=await examQuiz(NUMQ[i],i+1,NUMQ.length,true);if(!cont)return false;}
-  return true;
+  /* returns the number answered right on the first try, or -1 if the drill was left early */
+  let right=0;
+  for(let i=0;i<NUMQ.length;i++){
+    const r=await examQuiz(NUMQ[i],i+1,NUMQ.length,true);
+    if(!r)return -1;
+    if(r==='right')right++;
+  }
+  return right;
 }
 async function runDrill(){
-  const done=await runDrillCore();
-  if(!done)return;
+  const right=await runDrillCore();
+  if(right<0)return;
   S.drillDone=1;save(); /* a finished drill stops being pitched at the end card */
   if(S.drillDue){finishRetake();return;}
+  const n=NUMQ.length;
   const card=el('div','mcard');
   card.append(el('div','qk','Numbers drill'));
-  card.append(el('h4','','Drill complete'));
-  card.insertAdjacentHTML('beforeend','<p>'+GAME.drill.doneCopy+' No effect on mastery; run it again any time.</p>');
-  const f=el('div','mfoot');const b=el('button','cta big','Close');b.onclick=closeModal;f.append(b);card.append(f);
+  card.append(el('h4','',right===n?'Drill complete: '+n+' of '+n:'Drill complete: '+right+' of '+n));
+  card.insertAdjacentHTML('beforeend','<p>'+GAME.drill.doneCopy+' '+(right===n
+    ?'All '+n+' right on the first try. Run it again any time.'
+    :'You got '+right+' of '+n+' right on the first try; each miss showed the right calculation along the way. Nothing is at stake here, so run it again any time and get all '+n+'.')+'</p>');
+  const f=el('div','mfoot');
+  if(right<n){const rr=el('button','cta','Run it again');rr.onclick=()=>{closeModal();runDrill();};f.append(rr);}
+  const b=el('button','cta big','Close');b.onclick=closeModal;f.append(b);card.append(f);
   openModal(card,true);
 }
 function showQuizLib(){
