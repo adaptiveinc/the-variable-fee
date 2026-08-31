@@ -101,6 +101,9 @@
   }
   .scene-top{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:12px 14px;pointer-events:none}
   .scene-top>*{pointer-events:auto}
+  .stl{display:flex;gap:10px;align-items:flex-start}
+  /* the room's own nameplate: only wanted where the HUD breadcrumb is hidden */
+  .roomtag{display:none}
   .backbtn{font-size:12.5px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:5px 12px;background:#0e141cd9}
   .backbtn:hover{color:var(--text);border-color:var(--faint)}
   .objective{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;color:var(--muted);
@@ -289,7 +292,7 @@
   }
   [data-theme="light"] #hud{background:#f4f6fae8}
   [data-theme="light"] .scene{background:#c9d3e1;border-color:#8b99ab}
-  [data-theme="light"] .backbtn,[data-theme="light"] .objective{background:#ffffffd9}
+  [data-theme="light"] .backbtn,[data-theme="light"] .objective,[data-theme="light"] .roomtag{background:#ffffffd9}
   [data-theme="light"] .dlg{background:#fffffff0;border-color:#c3ccd8}
   [data-theme="light"] .dlg p{color:#2a3442}
   [data-theme="light"] .mcard{background:#ffffff;border-color:#a97b1c55}
@@ -559,6 +562,30 @@
     .mwrap{padding:3vh 8px 40px}
     .mcard{padding:16px 15px}
     .books-callout{width:min(300px,86vw)}
+    /* the scene header stacks, and the room names itself: on a phone you only
+       ever see a slice of the room, so it has to say where you are */
+    .scene-top{padding:8px 8px 0}
+    .stl{flex-direction:column;gap:5px}
+    .backbtn{font-size:11.5px;padding:4px 10px}
+    .objective{font-size:9.5px;padding:5px 8px;max-width:36vw}
+    .roomtag{display:block;background:#0e141cd9;border:1px solid var(--line);
+      border-radius:6px;padding:5px 9px;max-width:58vw}
+    .roomtag .rt-house{display:block;font-family:var(--mono);font-size:8.5px;
+      letter-spacing:1.4px;color:var(--faint);text-transform:uppercase}
+    .roomtag b{display:block;font-size:13px;color:var(--text);line-height:1.25}
+  }
+  /* a phone held sideways misses the width query above, and then the HUD and the
+     rotate hint push the room itself below the fold. Give the height back. */
+  @media(max-height:540px) and (orientation:landscape){
+    #mobiletip{display:none!important}
+    /* the right padding is the room the absolutely-placed mastery block needs */
+    #hud{padding:5px 200px 5px 12px;gap:7px}
+    #audit{top:8px}
+    #stage{padding:6px 10px 16px}
+    .dlg{left:8px;right:8px;bottom:6px;padding:8px 10px}
+    .dlg p{font-size:12.5px}
+    .mwrap{padding:2vh 10px 24px}
+    .mcard{padding:15px 16px}
   }
   #mobiletip{display:none;align-items:flex-start;gap:10px;margin:8px 8px 0;padding:9px 12px;border:1px solid #d9a64855;border-radius:10px;
     background:var(--gold-dim);color:var(--muted);font-size:12.5px;line-height:1.5}
@@ -576,7 +603,7 @@
   <div id="ledgerchips"></div>
   <div id="audit" role="button" tabindex="0" title="Case mastery: earned one right first-try answer at a time. Click to open the audit file."><span>mastery</span><div class="bar"><i id="auditBar" style="width:0%"></i></div><b id="auditVal">0</b></div>
 </div>
-<div id="mobiletip"><span>📱 <strong>Playing on a phone:</strong> swipe rooms sideways, the glow marks your next step. Rotate for the full view.</span><button aria-label="Dismiss">×</button></div>
+<div id="mobiletip"><span>📱 <strong>On a phone:</strong> swipe the room sideways; the glow marks your next step. Turn the phone for more of it.</span><button aria-label="Dismiss">×</button></div>
 <div id="stage"></div>
 <div id="modal-root"><div class="mback"></div><div class="mwrap" id="mwrap"></div></div>
 
@@ -1373,7 +1400,19 @@ function sceneShell(roomId,objectiveHTML){
   const top=el('div','scene-top');
   const back=el('button','backbtn',GAME.backLabel);
   back.onclick=()=>{closeModal();renderMap();};
-  top.append(back);
+  /* on a phone the HUD breadcrumb is hidden and the scene's own title is off to
+     the side of the swipeable viewport, so the room says its name here instead */
+  const left=el('div','stl');
+  left.append(back);
+  if(ROOM_NAMES[roomId]){
+    const n=ROOM_ORDER.indexOf(roomId);
+    const house=GAME.roomHouse?GAME.roomHouse(roomId):'';
+    const tag=el('div','roomtag');
+    tag.innerHTML=(house?'<span class="rt-house">'+house+'</span>':'')
+      +'<b>'+(n>=0?(n+1)+' · ':'')+ROOM_NAMES[roomId]+'</b>';
+    left.append(tag);
+  }
+  top.append(left);
   const obj=el('div','objective',objectiveHTML||'');
   obj.id='objective';
   top.append(obj);
