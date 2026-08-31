@@ -21,7 +21,9 @@
   /* ---------------- HUD ---------------- */
   #hud{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 200px 12px 18px;
     border-bottom:1px solid var(--line);background:#0e141cf5;position:sticky;top:0;z-index:40}
-  #hud .brand{font-family:var(--serif);font-size:17px;white-space:nowrap}
+  #hud .brand{font-family:var(--serif);font-size:17px;white-space:nowrap;cursor:pointer}
+  #hud .brand:hover em{color:var(--text)}
+  #hud .brand:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:4px}
   #hud .brand em{font-style:italic;color:var(--gold)}
   #hud .where{font-family:var(--mono);font-size:10.5px;letter-spacing:1.8px;text-transform:uppercase;color:var(--faint)}
   .dirbtn{font-family:var(--mono);font-size:10.5px;letter-spacing:1px;color:var(--cyan);border:1px solid #72b7cc44;border-radius:6px;padding:3px 10px;transition:background .15s}
@@ -1498,6 +1500,17 @@ function restartGame(){
   closeModal();renderMap();
 }
 function bootShell(){
+  /* the brand is the way back to the opening screen: without it, once you take
+     the case the overview is unreachable except by restarting */
+  const brand=document.querySelector('#hud .brand');
+  if(brand){
+    brand.setAttribute('role','button');
+    brand.setAttribute('tabindex','0');
+    brand.title='Back to the opening screen';
+    const home=()=>{closeModal();titleScreen();};
+    brand.onclick=home;
+    brand.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();home();}};
+  }
   document.getElementById('dirBtn').onclick=()=>showDirectory();
   document.getElementById('audit').onclick=()=>showAudit();
   document.getElementById('audit').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showAudit();}};
@@ -1662,6 +1675,13 @@ function renderMap(){
       ${person(0,0,0.85,'#d9a648','#6b5222')}${thought}
     </g>
   </svg></div>`;
+  /* the map is a place too: it needs the same way out that a room has */
+  const mtop=el('div','scene-top');
+  const mback=el('button','backbtn','\u2190 Overview');
+  mback.title='Back to the opening screen';
+  mback.onclick=()=>{closeModal();titleScreen();};
+  const mstl=el('div','stl'); mstl.append(mback); mtop.append(mstl);
+  sc.append(mtop);
   wrap.append(sc);
   const hint=el('p','', '');
   hint.style.cssText='color:var(--faint);font-size:12.5px;margin-top:10px;text-align:center';
