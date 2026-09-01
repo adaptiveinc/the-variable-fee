@@ -155,6 +155,9 @@
   .hs.done .ring{stroke:var(--green)} .hs.done text{fill:var(--green)}
   .hs.done .pulse{display:none}
   .hs .cap{font-size:10.5px;letter-spacing:1.6px;font-weight:600;paint-order:stroke;stroke:#0e141c;stroke-width:3px}
+  .hs:focus{outline:none}
+  .hs:focus-visible .halo{fill:var(--gold);opacity:.28}
+  .hs:focus-visible .ring{stroke:var(--gold);stroke-width:3}
   .hs .tick{display:none}
   .hs.done .glyph{display:none}
   .hs.done .tick{display:block}
@@ -563,6 +566,12 @@
     .dlg .pv{width:30px;height:30px;font-size:10px}
     .mwrap{padding:3vh 8px 40px}
     .mcard{padding:16px 15px}
+    /* a long option list must never push the action below the fold: the
+       question stays at the top of the card and the buttons at the bottom */
+    .mcard .q{position:sticky;top:-1px;z-index:2;background:var(--panel);
+      padding:8px 0 10px;margin-bottom:10px;box-shadow:0 6px 8px -8px #0008}
+    .mcard .mfoot{position:sticky;bottom:-1px;z-index:2;background:var(--panel);
+      padding:10px 0 2px;margin-top:12px;box-shadow:0 -6px 8px -8px #0008}
     .books-callout{width:min(300px,86vw)}
     /* on a phone you only ever see a slice of the room, so the header has to say
        where you are — but as ONE title bar, not three chips floating on the art */
@@ -595,6 +604,13 @@
     .mwrap{padding:2vh 10px 24px}
     .mcard{padding:15px 16px}
   }
+  /* the panner is only meaningful where the room overflows the screen */
+  .scenepan{display:none}
+  @media(max-width:740px) and (orientation:portrait){
+    .scenepan{display:block;position:absolute;right:9px;bottom:9px;z-index:6;
+      font-family:var(--mono);font-size:10.5px;letter-spacing:.6px;color:var(--gold);
+      background:var(--ink);border:1px solid #d9a64866;border-radius:7px;padding:6px 10px}
+  }
   #mobiletip{display:none;align-items:flex-start;gap:10px;margin:8px 8px 0;padding:9px 12px;border:1px solid #d9a64855;border-radius:10px;
     background:var(--gold-dim);color:var(--muted);font-size:12.5px;line-height:1.5}
   #mobiletip strong{color:var(--text)}
@@ -611,7 +627,7 @@
   <div id="ledgerchips"></div>
   <div id="audit" role="button" tabindex="0" title="Case mastery: earned one right first-try answer at a time. Click to open the audit file."><span>mastery</span><div class="bar"><i id="auditBar" style="width:0%"></i></div><b id="auditVal">0</b></div>
 </div>
-<div id="mobiletip"><span>📱 <strong>On a phone:</strong> swipe the room sideways; the glow marks your next step. Turn the phone for more of it.</span><button aria-label="Dismiss">×</button></div>
+<div id="mobiletip"><span>📱 <strong>On a phone:</strong> the room is wider than the screen — swipe it, or tap <strong>the data screen →</strong> at the bottom right. The glow marks your next step.</span><button aria-label="Dismiss">×</button></div>
 <div id="stage"></div>
 <div id="modal-root"><div class="mback"></div><div class="mwrap" id="mwrap"></div></div>
 
@@ -761,15 +777,28 @@ function showMasteryCallout(){
   };
   setTimeout(attempt,700);
 }
-/* the gold speech bubble that hangs off a HUD element and points at it */
+/* the gold speech bubble that hangs off a HUD element and points at it.
+   Only one is ever on screen: a second arriving while one is open waits its
+   turn, so two tips can never cover each other or the interface. */
+let CO_QUEUE=[], CO_CURRENT=null;
 function callout(target,html,ms){
+  CO_QUEUE.push({target,html,ms});
+  drainCallouts();
+}
+function drainCallouts(){
+  if(CO_CURRENT&&CO_CURRENT.isConnected)return;
+  CO_CURRENT=null;
+  const next=CO_QUEUE.shift();
+  if(next)CO_CURRENT=renderCallout(next.target,next.html,next.ms);
+}
+function renderCallout(target,html,ms){
   const hud=document.getElementById('hud');
-  if(!target||!hud)return;
+  if(!target||!hud){drainCallouts();return null;}
   const c=el('div','books-callout','<button class="bc-x" aria-label="Dismiss">×</button>'+html);
   hud.append(c);
   const center=target.offsetLeft+target.offsetWidth/2;
   c.style.right=Math.max(8,hud.clientWidth-center-52)+'px';
-  const kill=()=>c.remove();
+  const kill=()=>{c.remove();drainCallouts();};
   /* ms 0 = sticky: it stays until the × is clicked, for popups that state a goal */
   if(ms===0){c.onclick=e=>{if(e.target.closest('.bc-x'))kill();};}
   else{c.onclick=kill;setTimeout(kill,ms||14000);}
@@ -1370,13 +1399,17 @@ function person(x,y,s,color,dark,kind){
   </g>`;
 }
 function hotspot(x,y,label,id,cls,cap){
-  return `<g class="hs ${cls||''}" data-hs="${id}" transform="translate(${x},${y})" tabindex="0" role="button">
+  /* the glyph and the tick are decoration: the accessible name is the caption
+     plus the state, kept in step by refreshNext(). Without aria-hidden the
+     hidden tick would read out as "completed" before anything is done. */
+  const name=(cap||label||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  return `<g class="hs ${cls||''}" data-hs="${id}" data-cap="${name}" transform="translate(${x},${y})" tabindex="0" role="button" aria-label="${name}, not completed">
     <circle class="halo" r="24"/>
     <circle class="pulse" r="14" style="transform-origin:0 0"/>
     <circle class="ring" r="13"/>
-    <text class="glyph">${label}</text>
-    <text class="tick">✓</text>
-    ${cap?`<text class="cap" y="28">${cap}</text>`:''}
+    <text class="glyph" aria-hidden="true">${label}</text>
+    <text class="tick" aria-hidden="true">✓</text>
+    ${cap?`<text class="cap" aria-hidden="true" y="28">${cap}</text>`:''}
   </g>`;
 }
 function wallWindow(x,y,w,h,sky){
@@ -1398,7 +1431,9 @@ const stage=document.getElementById('stage');
 /* rebuilding the stage always releases the hotspot lock: a handler whose scene
    was torn down mid-await (walked out during a dialogue) must not freeze the next room */
 function clearStage(){stage.innerHTML='';HS_BUSY=false;}
+let CURRENT_ROOM=null;
 function sceneShell(roomId,objectiveHTML){
+  CURRENT_ROOM=roomId;
   clearStage();
   const wrap=el('div','fadein');
   const sc=el('div','scene');
@@ -1424,12 +1459,47 @@ function sceneShell(roomId,objectiveHTML){
   const obj=el('div','objective',objectiveHTML||'');
   obj.id='objective';
   top.append(obj);
-  return {sc,top,obj,mount(svg){sc.innerHTML='<div class="scenewrap">'+svg+'</div>';sc.append(top);}};
+  return {sc,top,obj,mount(svg){
+    sc.innerHTML='<div class="scenewrap">'+svg+'</div>';sc.append(top);
+    /* the SVG has no measured width until after layout, so ask twice and once
+       more late; scenePanner() replaces any panner it already made */
+    const pan=()=>scenePanner(sc);
+    requestAnimationFrame(()=>requestAnimationFrame(pan));
+    setTimeout(pan,300);
+  }};
+}
+/* On a phone the room is wider than the screen and the data screen sits off
+   the right edge, where nothing announces it. This is the announcement: one
+   button that says where it will take you and takes you there. */
+function scenePanner(sc){
+  const wrap=sc.querySelector('.scenewrap');
+  if(!wrap)return;
+  sc.querySelectorAll(':scope > .scenepan').forEach(n=>n.remove());
+  if(wrap.scrollWidth<=wrap.clientWidth+8)return;   /* it all fits: no panner */
+  const b=el('button','scenepan','');
+  const far=()=>wrap.scrollWidth-wrap.clientWidth;
+  const atData=()=>wrap.scrollLeft>far()/2;
+  const sync=()=>{b.textContent=atData()?'\u2190 The room':'The data screen \u2192';
+    b.setAttribute('aria-label',atData()?'Scroll back to the room':'Scroll to the data screen');};
+  b.onclick=()=>{
+    const to=atData()?0:far();
+    if(!RM){try{wrap.scrollTo({left:to,behavior:'smooth'});}catch(e){}}
+    /* some engines ignore a smooth scrollTo on this element, so land it either way */
+    setTimeout(()=>{if(Math.abs(wrap.scrollLeft-to)>2)wrap.scrollLeft=to;sync();},RM?0:420);
+  };
+  wrap.addEventListener('scroll',sync,{passive:true});
+  sync(); sc.append(b);
 }
 function setObjective(html){const o=document.getElementById('objective');if(o)o.innerHTML=html;}
 let HS_BUSY=false;
 function refreshNext(){
   const sc=document.getElementById('scene'); if(!sc)return;
+  /* the accessible name carries the state, so a screen reader hears which
+     steps are still open without relying on the decorative tick */
+  sc.querySelectorAll('.hs').forEach(h=>{
+    const n=h.dataset.cap||'';
+    h.setAttribute('aria-label',n+(h.classList.contains('done')?', completed':', not completed'));
+  });
   sc.querySelectorAll('.hs.next').forEach(h=>h.classList.remove('next'));
   const nxt=[...sc.querySelectorAll('.hs')].find(h=>!h.classList.contains('done')&&!h.classList.contains('hidden'));
   if(nxt){
@@ -1480,13 +1550,29 @@ function completeRoom(id){
   if(S.progress&&S.progress[id])delete S.progress[id];
   if(!S.done[id]){S.done[id]=true;save();}
 }
-/* the big button that takes a finished scene back to the map/line */
+/* the way out of a finished scene. The primary action goes straight to the
+   next meeting: routing every hand-off through the map made the player click
+   twice to continue, once on a button that already named where it was going.
+   The map stays available as the secondary action. */
 function doorOut(sc,label){
-  const prev=sc.querySelector(':scope > .cta.big'); if(prev)prev.remove();
-  const b=el('button','cta big',label||GAME.backLabel.replace('← ','Back to the ')+' →');
-  b.style.cssText='position:absolute;left:50%;transform:translateX(-50%);bottom:16px;z-index:5';
-  b.onclick=()=>renderMap();
-  sc.append(b);
+  sc.querySelectorAll(':scope > .cta.big, :scope > .doorrow').forEach(n=>n.remove());
+  const idx=ROOM_ORDER.indexOf(CURRENT_ROOM);
+  const next=idx>=0?ROOM_ORDER[idx+1]:null;
+  const row=el('div','doorrow');
+  row.style.cssText='position:absolute;left:50%;transform:translateX(-50%);bottom:16px;z-index:5;'
+    +'display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap';
+  if(next&&S.done[CURRENT_ROOM]){
+    const m=el('button','cta ghost',GAME.backLabel);
+    m.onclick=()=>{closeModal();renderMap();};
+    const b=el('button','cta big',label||('Next: '+ROOM_NAMES[next]+' →'));
+    b.onclick=()=>{closeModal();enterRoom(next);};
+    row.append(m,b);
+  } else {
+    const b=el('button','cta big',label||GAME.backLabel.replace('← ','Back to the ')+' →');
+    b.onclick=()=>{closeModal();renderMap();};
+    row.append(b);
+  }
+  sc.append(row);
 }
 /* ================= shell: HUD wiring, theme, restart, phone tip =================
    Everything in the top bar that is the same in every game on the kit. The host
