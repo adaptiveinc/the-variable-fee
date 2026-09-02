@@ -627,7 +627,7 @@
   <div id="ledgerchips"></div>
   <div id="audit" role="button" tabindex="0" title="Case mastery: earned one right first-try answer at a time. Click to open the audit file."><span>mastery</span><div class="bar"><i id="auditBar" style="width:0%"></i></div><b id="auditVal">0</b></div>
 </div>
-<div id="mobiletip"><span>📱 <strong>On a phone:</strong> the room is wider than the screen — swipe it, or tap <strong>the data screen →</strong> at the bottom right. The glow marks your next step.</span><button aria-label="Dismiss">×</button></div>
+<div id="mobiletip"><span>📱 <strong>On a phone:</strong> the room is wider than the screen. Swipe it, or tap <strong>the data screen →</strong> at the bottom right. The glow marks your next step.</span><button aria-label="Dismiss">×</button></div>
 <div id="stage"></div>
 <div id="modal-root"><div class="mback"></div><div class="mwrap" id="mwrap"></div></div>
 
@@ -1125,7 +1125,7 @@ function retakeMissed(cleared,total){
   card.append(el('h4','','Not cleared this time'));
   card.insertAdjacentHTML('beforeend','<p>'+(cleared
     ?'You had '+cleared+' of '+total+' right before that one. '
-    :'')+'A retake has to be answered right in one sitting, so this attempt stops here — but <strong>nothing is lost</strong>. The findings are still open, still worth the same mastery, and the retake starts again from the top whenever you want. The explanation you just read stays with them.</p>');
+    :'')+'A retake has to be answered right in one sitting, so this attempt stops here, but <strong>nothing is lost</strong>. The findings are still open, still worth the same mastery, and the retake starts again from the top whenever you want. The explanation you just read stays with them.</p>');
   card.insertAdjacentHTML('beforeend','<p class="fy">You can also come back to it later from <strong>✎ quiz</strong> in the top bar.</p>');
   const f=el('div','mfoot');
   const again=el('button','cta big','Try the retake again');
